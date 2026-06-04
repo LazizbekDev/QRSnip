@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QRSnip — Screenshot</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background-color: #0f1117;
+    }
+    #screenshot-bg {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      object-fit: contain;
+      object-position: top left; /* Since captureVisibleTab gives exactly the viewport, it should match 1:1 */
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+  </style>
+</head>
+<body>
+  <!-- The captured screenshot will be placed here -->
+  <img id="screenshot-bg" src="" alt="Screenshot">
+
+  <!-- jsqr library and our logic script -->
+  <script src="jsqr.js"></script>
+  <script src="cropper.js"></script>
+</body>
+</html>

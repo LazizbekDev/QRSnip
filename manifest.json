@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "QRSnip: Screen QR Code Scanner",
+  "version": "1.0.0",
+  "description": "Scan QR codes on any webpage using an interactive screen-snipping tool. No Data Collection. 100% Offline.",
+  "action": {
+    "default_title": "QR Snap — Click to scan",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "file:///*"
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Q",
+        "mac": "Command+Shift+Q"
+      },
+      "description": "Activate QRSnip snipping tool"
+    }
+  }
+}

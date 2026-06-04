@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+generete.py
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Misc
+*.zip
+*.log
+.vscode/
