@@ -2,32 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>QRSnip — Screenshot</title>
+  <title>QRSnip — Scanner</title>
   <link rel="stylesheet" href="styles.css">
   <style>
     body {
       margin: 0;
       padding: 0;
       overflow: hidden;
-      background-color: #0f1117;
+      background-color: #0c1014;
+      font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body.qrs-empty {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 40%, rgba(45, 212, 191, 0.06), transparent 70%),
+        #0c1014;
     }
     #screenshot-bg {
       display: block;
       width: 100vw;
       height: 100vh;
       object-fit: contain;
-      object-position: top left; /* Since captureVisibleTab gives exactly the viewport, it should match 1:1 */
+      object-position: top left;
       user-select: none;
       -webkit-user-drag: none;
     }
   </style>
 </head>
 <body>
-  <!-- The captured screenshot will be placed here -->
   <img id="screenshot-bg" src="" alt="Screenshot">
-
-  <!-- jsqr library and our logic script -->
-  <script src="jsqr.js"></script>
+  <script src="payload.js"></script>
+  <script src="history.js"></script>
   <script src="cropper.js"></script>
 </body>
 </html>

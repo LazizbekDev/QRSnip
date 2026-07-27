@@ -16,3 +16,6 @@ Thumbs.db
 *.zip
 *.log
 .vscode/
+dist/
+package-lock.json
+node_modules/
