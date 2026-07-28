@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- QRSnip mark: selection frame + scissors -->
+  <rect width="128" height="128" fill="#000000"/>
+  <g
+    stroke="#5EEAD4"
+    stroke-width="7.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    fill="none"
+  >
+    <!-- Top-left corner -->
+    <path d="M28 52 V34 Q28 28 34 28 H52"/>
+    <!-- Top-right corner -->
+    <path d="M76 28 H94 Q100 28 100 34 V52"/>
+    <!-- Bottom-left corner -->
+    <path d="M28 76 V94 Q28 100 34 100 H52"/>
+    <!-- Left dashed cut line -->
+    <path d="M28 60 V68" stroke-dasharray="0.1 14"/>
+    <!-- Top dashed hint (short) -->
+    <path d="M60 28 H68" stroke-dasharray="0.1 14"/>
+
+    <!-- Scissors at bottom-right (integrated into frame) -->
+    <!-- Pivot -->
+    <circle cx="86" cy="86" r="3.2" fill="#5EEAD4" stroke="none"/>
+    <!-- Handles -->
+    <circle cx="98" cy="104" r="7" />
+    <circle cx="110" cy="92" r="7" />
+    <!-- Handle stems to pivot -->
+    <path d="M93 99 L88 89"/>
+    <path d="M104 90 L90 88"/>
+    <!-- Blades (dashed cutting path into frame) -->
+    <path d="M82 82 L58 58" stroke-dasharray="6 7"/>
+    <path d="M84 80 L72 56"/>
+  </g>
+</svg>

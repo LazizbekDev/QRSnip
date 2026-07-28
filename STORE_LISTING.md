@@ -9,41 +9,38 @@ Copy these fields into the [Chrome Web Store Developer Dashboard](https://chrome
 QRSnip: QR Code & Barcode Scanner
 ```
 
-## Short description (max 132) — SEO
+## Short description (max 132)
 ```
-Free offline QR code & barcode scanner. Snip any screen area, scan images, smart actions & local history. No data collection.
+Snip any screen area to scan QR codes and barcodes. Smart actions, local history, and 100% offline — no data collection.
 ```
-Length: 125 characters.
+Length: 118 characters.
 
 ## Detailed description
 ```
-QRSnip is a fast, private QR code and barcode scanner for Chrome. Snip any area of the page — or drop/paste an image — and decode instantly. Everything runs locally in your browser. No uploads. No tracking. 100% offline.
+QRSnip is a private QR code and barcode scanner for Chrome. Draw a selection around any code on the page — or drop or paste an image — and decode it instantly. Everything runs locally in your browser. No uploads. No tracking. 100% offline.
 
-★ Why QRSnip?
-• Screen snip scanner — draw around any code on a webpage
-• Multi-format: QR, EAN-13, EAN-8, UPC, Code 128/39/93, Codabar, ITF, Data Matrix, PDF417, Aztec
+Why QRSnip?
+• Screen snip — draw around a code on any webpage
+• Multi-format support: QR, EAN-13, EAN-8, UPC, Code 128/39/93, Codabar, ITF, Data Matrix, PDF417, Aztec
 • Smart actions: open links, copy Wi-Fi passwords, call/SMS/email, open maps, copy contacts
-• Multiple codes in one selection
+• Detect multiple codes in one selection
 • Local scan history (clear anytime)
 • Keyboard shortcut: Alt+Q (⌥Q on Mac)
-• Right-click any image → “Scan with QRSnip”
+• Right-click an image → “Scan with QRSnip”
 • Drop or paste images to scan
-• Minimal permissions — activeTab only when you scan
+• Minimal permissions — access only when you scan
 • No ads, no accounts, no cloud
 
-★ Perfect for
-Developers • QA testers • Marketers • Support teams • Anyone who needs a private QR/barcode reader without leaving the tab
-
-★ How to use
+How to use
 1. Click the QRSnip icon or press Alt+Q (⌥Q on Mac)
 2. Drag a selection around the QR code or barcode
 3. Copy, open, or use the smart action — or tap Scan again
 
-★ Privacy first
+Privacy
 Screenshots and decoded data never leave your device. Scan history stays in local storage only. We collect nothing.
-
-Keywords people search: QR code scanner, barcode reader, QR scanner Chrome, offline QR scanner, screen QR scanner, scan QR from webpage, EAN barcode scanner, privacy QR reader
 ```
+
+**Do not** add a “keywords people search” list or comma-separated SEO keyword dumps — Chrome rejects this as Keyword Spam (Yellow Argon).
 
 ## Category
 ```
@@ -57,14 +54,17 @@ English
 ```
 
 ## Store listing assets checklist
-- [ ] Store icon: 128×128 PNG (use `icons/icon128.png`)
-- [ ] Small promo tile: 440×280 (optional but recommended)
-- [ ] Screenshots: at least 1, ideally 3–5 (1280×800 or 640×400)
-  1. Snip selection around a QR code
-  2. Result modal with smart action (Open Link)
-  3. Multi-format / barcode example
-  4. History panel
-- [ ] Privacy policy URL: host `index.html` publicly (GitHub Pages / your site) and paste that URL in the dashboard
+- [x] Screenshots (1280×800) in `store-assets/screenshots/`
+  1. `01-snip-selection.png` — snip around a QR code
+  2. `02-result-open-link.png` — result modal + Open Link
+  3. `03-multiformat-codes.png` — multi-format / multiple codes
+  4. `04-history-panel.png` — history panel
+- [x] Smaller copies (640×400) in `store-assets/screenshots/640x400/`
+- [x] Store icon: 128×128 PNG (`icons/icon128.png` / `store-assets/store-icon-128.png`)
+- [ ] Small promo tile: 440×280 (optional)
+- [ ] Privacy policy URL: host `index.html` publicly and paste that URL in the dashboard
+
+Upload order in the Dashboard: 01 → 02 → 03 → 04.
 
 ## Permission justification (Dashboard → Privacy)
 | Permission | Justification |
