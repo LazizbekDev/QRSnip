@@ -1,0 +1,21 @@
+{
+  "name": "qrsnip",
+  "version": "2.2.0",
+  "private": true,
+  "description": "QRSnip Chrome extension — screen QR & barcode scanner",
+  "scripts": {
+    "build:decoder": "node scripts/build-decoder.mjs",
+    "pack": "npm run build:decoder && bash pack.sh"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LazizbekDev/QRSnip.git"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "zxing-wasm": "^3.1.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}

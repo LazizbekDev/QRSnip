@@ -17,5 +17,7 @@ Thumbs.db
 *.log
 .vscode/
 dist/
-package-lock.json
 node_modules/
+package-lock.json
+# Keep vendor/ committed so Store packs work without a rebuild
+

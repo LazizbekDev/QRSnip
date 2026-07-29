@@ -1,4 +1,4 @@
-# QRSnip v2.1 — Chrome Web Store Listing
+# QRSnip v2.2 — Chrome Web Store Listing
 
 Copy these fields into the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 
@@ -21,7 +21,7 @@ QRSnip is a private QR code and barcode scanner for Chrome. Draw a selection aro
 
 Why QRSnip?
 • Screen snip — draw around a code on any webpage
-• Multi-format support: QR, EAN-13, EAN-8, UPC, Code 128/39/93, Codabar, ITF, Data Matrix, PDF417, Aztec
+• Wide format support via native Chrome detection plus an offline ZXing engine: QR, Micro QR, rMQR, Data Matrix, Aztec, MaxiCode, PDF417 / Micro PDF417, EAN/UPC, Code 39/93/128, Codabar, ITF, GS1 DataBar, Telepen, and related variants
 • Smart actions: open links, copy Wi-Fi passwords, call/SMS/email, open maps, copy contacts
 • Detect multiple codes in one selection
 • Local scan history (clear anytime)
@@ -31,13 +31,16 @@ Why QRSnip?
 • Minimal permissions — access only when you scan
 • No ads, no accounts, no cloud
 
+Supported: Italian Pharmacode (Code 32) and PZN.
+Not supported: DotCode, postal barcodes (POSTNET/USPS/IMB/Planet), Microsoft Tag / HCCB, and Laetus Pharmacode.
+
 How to use
 1. Click the QRSnip icon or press Alt+Q (⌥Q on Mac)
 2. Drag a selection around the QR code or barcode
 3. Copy, open, or use the smart action — or tap Scan again
 
 Privacy
-Screenshots and decoded data never leave your device. Scan history stays in local storage only. We collect nothing.
+Screenshots and decoded data never leave your device. Scan history stays in local storage only. Decoding uses local APIs and a bundled WebAssembly module — nothing is sent to a server. We collect nothing.
 ```
 
 **Do not** add a “keywords people search” list or comma-separated SEO keyword dumps — Chrome rejects this as Keyword Spam (Yellow Argon).
@@ -61,8 +64,11 @@ English
   4. `04-history-panel.png` — history panel
 - [x] Smaller copies (640×400) in `store-assets/screenshots/640x400/`
 - [x] Store icon: 128×128 PNG (`icons/icon128.png` / `store-assets/store-icon-128.png`)
-- [ ] Small promo tile: 440×280 (optional)
+- [x] Small promo tile 440×280: `store-assets/promo/small-promo-440x280.png` (also `.jpg`; brand-only alt: `small-promo-440x280-brand.png`)
+- [x] Marquee promo tile 1400×560: `store-assets/promo/marquee-promo-1400x560.png` (also `.jpg`)
 - [ ] Privacy policy URL: host `index.html` publicly and paste that URL in the dashboard
+
+All promo tiles are **24-bit RGB (no alpha)** — Store-compliant.
 
 Upload order in the Dashboard: 01 → 02 → 03 → 04.
 

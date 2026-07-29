@@ -2,9 +2,15 @@
 
 const FORMAT_LABELS = {
   qr_code: "QR",
+  micro_qr_code: "Micro QR",
+  rm_qr_code: "rMQR",
   aztec: "Aztec",
+  aztec_rune: "Aztec Rune",
   data_matrix: "Data Matrix",
+  maxi_code: "MaxiCode",
   pdf417: "PDF417",
+  compact_pdf417: "Compact PDF417",
+  micro_pdf417: "Micro PDF417",
   ean_13: "EAN-13",
   ean_8: "EAN-8",
   upc_a: "UPC-A",
@@ -12,8 +18,17 @@ const FORMAT_LABELS = {
   code_128: "Code 128",
   code_39: "Code 39",
   code_93: "Code 93",
+  code_32: "Code 32",
+  pzn: "PZN",
   codabar: "Codabar",
   itf: "ITF",
+  itf_14: "ITF-14",
+  databar: "DataBar",
+  databar_stacked: "DataBar Stacked",
+  databar_limited: "DataBar Limited",
+  databar_expanded: "DataBar Expanded",
+  telepen: "Telepen",
+  dx_film_edge: "DX Film Edge",
   unknown: "Code",
 };
 

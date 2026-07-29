@@ -1,21 +1,5 @@
 // ─── QRSnip · Cropper Interface ─────────────────────────────────────────────
 
-const DETECT_FORMATS = [
-  "qr_code",
-  "aztec",
-  "data_matrix",
-  "pdf417",
-  "ean_13",
-  "ean_8",
-  "upc_a",
-  "upc_e",
-  "code_128",
-  "code_39",
-  "code_93",
-  "codabar",
-  "itf",
-];
-
 document.addEventListener("DOMContentLoaded", async () => {
   const data = await chrome.storage.local.get(["capturedImage", "scanSource"]);
   const bgImg = document.getElementById("screenshot-bg");
@@ -51,7 +35,6 @@ function initSnip({ empty }) {
   let startY = 0;
   let selBox = null;
   let guideLines = null;
-  let detector = null;
   let modalOpen = false;
   let historyOpen = false;
   let currentResults = [];
@@ -59,25 +42,10 @@ function initSnip({ empty }) {
 
   buildOverlay();
   bindGlobalDropPaste();
-  initDetector();
-
-  async function initDetector() {
-    try {
-      if (typeof BarcodeDetector === "undefined") {
-        showToast("BarcodeDetector unavailable in this browser.", "error");
-        return;
-      }
-      let formats = DETECT_FORMATS;
-      if (typeof BarcodeDetector.getSupportedFormats === "function") {
-        const supported = await BarcodeDetector.getSupportedFormats();
-        formats = DETECT_FORMATS.filter((f) => supported.includes(f));
-      }
-      detector = new BarcodeDetector({ formats: formats.length ? formats : undefined });
-    } catch (_) {
-      detector = null;
-      showToast("BarcodeDetector unavailable in this browser.", "error");
-    }
-  }
+  initDecoder().catch((err) => {
+    console.error("[QRSnip] Decoder init failed:", err);
+    showToast("Barcode decoder unavailable in this browser.", "error");
+  });
 
   // ─── Overlay ─────────────────────────────────────────────────────────────
   function buildOverlay() {
@@ -305,15 +273,17 @@ function initSnip({ empty }) {
   }
 
   async function detectFromCanvas(canvas) {
-    if (!detector) {
-      showToast("BarcodeDetector unavailable in this browser.", "error");
+    try {
+      await initDecoder();
+    } catch (_) {
+      showToast("Barcode decoder unavailable in this browser.", "error");
       resetSelection();
       return;
     }
 
     let barcodes = [];
     try {
-      barcodes = await detector.detect(canvas);
+      barcodes = await detectCodes(canvas);
     } catch (_) {
       showToast("Decode error — try a clearer selection.", "error");
       resetSelection();
@@ -344,8 +314,10 @@ function initSnip({ empty }) {
   }
 
   async function detectFromImageElement(imgEl) {
-    if (!detector) {
-      showToast("BarcodeDetector unavailable in this browser.", "error");
+    try {
+      await initDecoder();
+    } catch (_) {
+      showToast("Barcode decoder unavailable in this browser.", "error");
       return;
     }
 
@@ -362,7 +334,7 @@ function initSnip({ empty }) {
 
     let barcodes = [];
     try {
-      barcodes = await detector.detect(imgEl);
+      barcodes = await detectCodes(imgEl);
     } catch (_) {
       scanEl.remove();
       showToast("Decode error — try another image.", "error");

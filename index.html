@@ -49,8 +49,9 @@
         <p>When you activate QRSnip to scan a code:</p>
         <ul>
             <li>The extension may take a screenshot of the currently visible tab, or use an image you drop or paste.</li>
-            <li>The image is processed <strong>locally within your browser</strong> using Chrome’s built-in BarcodeDetector API.</li>
-            <li>Supported formats include QR codes and common 1D/2D barcodes (EAN, UPC, Code 128, Data Matrix, PDF417, Aztec, and more).</li>
+            <li>The image is processed <strong>locally within your browser</strong> using Chrome’s BarcodeDetector API and an offline ZXing WebAssembly decoder bundled with the extension (no network calls).</li>
+            <li>Supported formats include QR / Micro QR / rMQR, Data Matrix, Aztec, MaxiCode, PDF417 (and Micro/Compact), EAN/UPC, Code 39/93/128, Codabar, ITF, GS1 DataBar, Telepen, plus Italian Pharmacode (Code 32) and PZN.</li>
+            <li>Not supported: DotCode, postal barcodes (POSTNET/USPS/IMB/Planet), Microsoft Tag / HCCB, and Laetus Pharmacode.</li>
             <li>Decoded text never leaves your computer and is never sent to any external server.</li>
         </ul>
 
@@ -73,7 +74,7 @@
         <p>QRSnip does <strong>not</strong> request broad <code>&lt;all_urls&gt;</code> host access or permission to read your browsing history.</p>
 
         <h2>5. Third-Party Services</h2>
-        <p>We do not use any third-party analytics, tracking, or advertising services. There is no tracking code inside the extension. Decoding uses the browser’s native APIs only.</p>
+        <p>We do not use any third-party analytics, tracking, or advertising services. There is no tracking code inside the extension. Decoding uses the browser’s native BarcodeDetector API and a locally bundled open-source ZXing WebAssembly module — neither contacts external servers.</p>
 
         <h2>6. Changes to This Privacy Policy</h2>
         <p>We may update this Privacy Policy from time to time. If we make significant changes, we will update the “Effective Date” at the top of this policy.</p>
