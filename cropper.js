@@ -38,6 +38,7 @@ function initSnip({ empty }) {
   let modalOpen = false;
   let historyOpen = false;
   let currentResults = [];
+  let pendingReviewPrompt = false;
   let keyHandler = null;
 
   buildOverlay();
@@ -60,27 +61,32 @@ function initSnip({ empty }) {
     guideLines.innerHTML = `<div class="qrs-guide-h"></div><div class="qrs-guide-v"></div>`;
     overlay.appendChild(guideLines);
 
-    // Bottom dock — keeps chrome out of the snip area (macOS-screenshot style)
+    // Bottom dock — pill glass bar
     const dock = document.createElement("div");
     dock.id = "qrs-dock";
     dock.innerHTML = `
-      <span class="qrs-dock-hint" id="qrs-dock-hint">${
-        empty
-          ? "Drop or paste an image"
-          : "Drag around a code to scan"
-      }</span>
+      <span class="qrs-dock-hint" id="qrs-dock-hint">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/>
+        </svg>
+        ${
+          empty
+            ? "Drop or paste an image"
+            : "Drag around a code to scan"
+        }
+      </span>
       <span class="qrs-dock-sep" aria-hidden="true"></span>
       <kbd class="qrs-kbd">Esc</kbd>
-      <span class="qrs-dock-muted">cancel</span>
+      <span class="qrs-dock-muted">Cancel</span>
       <span class="qrs-dock-spacer"></span>
       <button type="button" class="qrs-tool-btn" id="qrs-history-btn" title="Scan history">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
         </svg>
         History
       </button>
       <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-close-tool" title="Close" aria-label="Close">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
@@ -220,6 +226,7 @@ function initSnip({ empty }) {
   }
 
   function scanAgain() {
+    dismissReviewPrompt(true);
     const modal = document.getElementById("qrs-modal");
     if (modal) dismissModal(modal, false);
     resetSelection();
@@ -306,8 +313,12 @@ function initSnip({ empty }) {
       await addHistoryEntry({ format: r.format, type: r.type, raw: r.raw });
     }
 
+    pendingReviewPrompt = await noteSuccessfulScan();
+
     if (results.length === 1) {
-      showResultModal(results[0]);
+      const showReview = pendingReviewPrompt;
+      pendingReviewPrompt = false;
+      showResultModal(results[0], { showReview });
     } else {
       showMultiResultModal(results);
     }
@@ -358,8 +369,15 @@ function initSnip({ empty }) {
       await addHistoryEntry({ format: r.format, type: r.type, raw: r.raw });
     }
 
-    if (results.length === 1) showResultModal(results[0]);
-    else showMultiResultModal(results);
+    pendingReviewPrompt = await noteSuccessfulScan();
+
+    if (results.length === 1) {
+      const showReview = pendingReviewPrompt;
+      pendingReviewPrompt = false;
+      showResultModal(results[0], { showReview });
+    } else {
+      showMultiResultModal(results);
+    }
   }
 
   // ─── Drop / Paste ────────────────────────────────────────────────────────
@@ -404,7 +422,13 @@ function initSnip({ empty }) {
     });
 
     const hint = document.getElementById("qrs-dock-hint");
-    if (hint) hint.textContent = "Drag around a code to scan";
+    if (hint) {
+      hint.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/>
+        </svg>
+        Drag around a code to scan`;
+    }
 
     // Auto-detect full image first; user can still snip
     await detectFromImageElement(bgImg);
@@ -448,7 +472,7 @@ function initSnip({ empty }) {
   }
 
   // ─── Result Modal (single) ───────────────────────────────────────────────
-  function showResultModal(parsed) {
+  function showResultModal(parsed, { showReview = false } = {}) {
     modalOpen = true;
     document.getElementById("qrs-modal")?.remove();
 
@@ -464,42 +488,53 @@ function initSnip({ empty }) {
       <div class="qrs-modal-inner">
         <div class="qrs-modal-header">
           <span class="qrs-modal-icon" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/>
-              <line x1="14" y1="14" x2="14" y2="14.01"/><line x1="17" y1="14" x2="17" y2="14.01"/>
-              <line x1="20" y1="14" x2="20" y2="14.01"/><line x1="14" y1="17" x2="14" y2="17.01"/>
-              <line x1="17" y1="17" x2="20" y2="20"/>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
             </svg>
           </span>
           <div class="qrs-modal-titles">
             <span class="qrs-modal-label">Code Detected</span>
             <div class="qrs-chips">
-              <span class="qrs-chip qrs-chip--format" style="animation-delay:40ms">${escapeHtml(parsed.formatLabel)}</span>
+              <span class="qrs-chip qrs-chip--format" style="animation-delay:40ms">${typeChipIcon(parsed.type)}${escapeHtml(parsed.formatLabel)}</span>
               <span class="qrs-chip qrs-chip--type" style="animation-delay:90ms">${escapeHtml(parsed.typeLabel)}</span>
             </div>
           </div>
-          <button class="qrs-modal-close" aria-label="Close" id="qrs-close-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <div class="qrs-modal-header-actions">
+            <button type="button" class="qrs-modal-tool" id="qrs-modal-history" title="Scan history" aria-label="Scan history">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
+              </svg>
+            </button>
+            <button class="qrs-modal-close" aria-label="Close" id="qrs-close-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="qrs-modal-body">
           <div class="qrs-result-plate">
             <p class="qrs-result-text">${escapeHtml(parsed.display)}</p>
+            <button type="button" class="qrs-result-copy-inline" id="qrs-copy-inline" title="Copy" aria-label="Copy">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+              </svg>
+            </button>
           </div>
         </div>
 
         <div class="qrs-modal-actions">
-          <button class="qrs-btn qrs-btn--ghost" id="qrs-again-btn" type="button">Scan again</button>
+          <button class="qrs-btn qrs-btn--ghost" id="qrs-again-btn" type="button">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+            Scan again
+          </button>
           ${
             primaryIsCopy
               ? ""
               : `<button class="qrs-btn qrs-btn--ghost" id="qrs-copy-btn" type="button">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square">
-                    <rect x="9" y="9" width="13" height="13"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
                   </svg>
                   Copy
                 </button>`
@@ -522,6 +557,80 @@ function initSnip({ empty }) {
     });
 
     wireResultModal(modal, parsed, primaryIsCopy);
+    if (showReview) {
+      scheduleReviewPrompt();
+    }
+  }
+
+  let reviewPromptTimer = null;
+
+  function scheduleReviewPrompt() {
+    clearTimeout(reviewPromptTimer);
+    reviewPromptTimer = setTimeout(() => {
+      reviewPromptTimer = null;
+      showReviewPrompt();
+    }, 620);
+  }
+
+  function showReviewPrompt() {
+    dismissReviewPrompt(true);
+    markReviewPromptDone();
+
+    const el = document.createElement("div");
+    el.id = "qrs-review-prompt";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-label", "Feedback");
+    el.innerHTML = `
+      <div class="qrs-review-card">
+        <button type="button" class="qrs-review-dismiss" id="qrs-review-dismiss" aria-label="Dismiss">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+        <div class="qrs-review-icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z"/>
+          </svg>
+        </div>
+        <div class="qrs-review-copy">
+          <p class="qrs-review-title">Finding QRSnip useful?</p>
+          <p class="qrs-review-sub">Your feedback helps others discover a private, offline scanner.</p>
+        </div>
+        <div class="qrs-review-actions">
+          <button type="button" class="qrs-btn qrs-btn--ghost" id="qrs-review-later">Not now</button>
+          <a class="qrs-btn qrs-btn--primary" id="qrs-review-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">Share feedback</a>
+        </div>
+      </div>
+    `;
+
+    document.documentElement.appendChild(el);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => el.classList.add("qrs-review-prompt--visible"));
+    });
+
+    el.querySelector("#qrs-review-dismiss")?.addEventListener("click", () =>
+      dismissReviewPrompt()
+    );
+    el.querySelector("#qrs-review-later")?.addEventListener("click", () =>
+      dismissReviewPrompt()
+    );
+    el.querySelector("#qrs-review-link")?.addEventListener("click", () => {
+      setTimeout(() => dismissReviewPrompt(), 120);
+    });
+  }
+
+  function dismissReviewPrompt(instant) {
+    clearTimeout(reviewPromptTimer);
+    reviewPromptTimer = null;
+    const el = document.getElementById("qrs-review-prompt");
+    if (!el) return;
+    if (instant) {
+      el.remove();
+      return;
+    }
+    el.classList.remove("qrs-review-prompt--visible");
+    el.classList.add("qrs-review-prompt--out");
+    setTimeout(() => el.remove(), 320);
   }
 
   function wireResultModal(modal, parsed, primaryIsCopy) {
@@ -529,15 +638,29 @@ function initSnip({ empty }) {
       dismissModal(modal, true)
     );
     document.getElementById("qrs-again-btn")?.addEventListener("click", scanAgain);
+    document.getElementById("qrs-modal-history")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openHistoryFromModal(modal);
+    });
+
+    const doCopy = async (btn) => {
+      await navigator.clipboard.writeText(parsed.copyValue);
+      if (btn) markCopied(btn);
+      setTimeout(() => dismissModal(modal, true), 900);
+    };
 
     const copyBtn = document.getElementById("qrs-copy-btn");
     if (copyBtn) {
-      copyBtn.addEventListener("click", async () => {
-        await navigator.clipboard.writeText(parsed.copyValue);
-        markCopied(copyBtn);
-        setTimeout(() => dismissModal(modal, true), 900);
-      });
+      copyBtn.addEventListener("click", () => doCopy(copyBtn));
     }
+
+    document.getElementById("qrs-copy-inline")?.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await navigator.clipboard.writeText(parsed.copyValue);
+      const inline = e.currentTarget;
+      inline.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+      inline.style.color = "var(--qrs-success)";
+    });
 
     const primaryBtn = document.getElementById("qrs-primary-btn");
     if (primaryBtn && parsed.primary) {
@@ -552,29 +675,76 @@ function initSnip({ empty }) {
       });
     }
 
-    // If primary is copy and no separate copy btn, primary handles it
-    if (primaryIsCopy && primaryBtn) {
-      // already wired above via runPrimaryAction
-    }
-
     modal.addEventListener("click", (e) => {
       if (e.target === modal) dismissModal(modal, true);
     });
   }
 
+  function openHistoryFromModal(modal) {
+    dismissReviewPrompt(true);
+    if (modal) {
+      modal.remove();
+      modalOpen = false;
+    }
+    resetSelection();
+    openHistoryPanel();
+  }
+
   function markCopied(btn) {
-    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
     btn.classList.add("qrs-btn--copied");
   }
 
   function primaryActionIcon(id) {
     if (id === "open" || id === "maps") {
-      return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
+      return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
     }
     if (id === "tel") {
-      return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>`;
+      return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>`;
     }
-    return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square"><rect x="9" y="9" width="13" height="13"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+    return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+  }
+
+  function formatGlyph(format) {
+    const f = (format || "").toLowerCase();
+    if (f.includes("qr") || f.includes("aztec") || f.includes("matrix") || f.includes("maxi")) {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v6M14 20h3"/></svg>`;
+    }
+    if (f.includes("pdf")) {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>`;
+    }
+    return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14M7 5v14M10 5v14M14 5v14M18 5v14M21 5v14"/></svg>`;
+  }
+
+  function typeGlyph(type) {
+    const t = (type || "").toLowerCase();
+    if (t === "url" || t === "link") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`;
+    }
+    if (t === "wifi") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1"/></svg>`;
+    }
+    if (t === "vcard" || t === "contact" || t === "mecard") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
+    }
+    if (t === "tel" || t === "sms") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>`;
+    }
+    if (t === "email" || t === "mailto") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>`;
+    }
+    if (t === "geo" || t === "maps") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+    }
+    return formatGlyph("barcode");
+  }
+
+  function typeChipIcon(type) {
+    const t = (type || "").toLowerCase();
+    if (t === "url" || t === "link") {
+      return `<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`;
+    }
+    return "";
   }
 
   // ─── Multi Result Modal ──────────────────────────────────────────────────
@@ -591,9 +761,10 @@ function initSnip({ empty }) {
       .map(
         (r, i) => `
       <button type="button" class="qrs-result-item" data-index="${i}" style="animation-delay:${40 + i * 50}ms">
-        <span class="qrs-chip qrs-chip--format">${escapeHtml(r.formatLabel)}</span>
-        <span class="qrs-chip qrs-chip--type">${escapeHtml(r.typeLabel)}</span>
+        <span class="qrs-result-item-icon" aria-hidden="true">${formatGlyph(r.format)}</span>
+        <span class="qrs-result-item-format">${escapeHtml(r.formatLabel)}</span>
         <span class="qrs-result-item-preview">${escapeHtml(r.display.slice(0, 80))}</span>
+        <span class="qrs-chip qrs-chip--type">${escapeHtml(r.typeLabel)}</span>
       </button>`
       )
       .join("");
@@ -601,26 +772,36 @@ function initSnip({ empty }) {
     modal.innerHTML = `
       <div class="qrs-modal-inner qrs-modal-inner--list">
         <div class="qrs-modal-header">
-          <span class="qrs-modal-icon" aria-hidden="true">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="square">
-              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/>
+          <span class="qrs-modal-icon qrs-modal-icon--list" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
             </svg>
           </span>
           <div class="qrs-modal-titles">
             <span class="qrs-modal-label">${results.length} Codes Found</span>
+            <span class="qrs-modal-sub">Scanned just now</span>
           </div>
-          <button class="qrs-modal-close" aria-label="Close" id="qrs-close-btn">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <div class="qrs-modal-header-actions">
+            <button type="button" class="qrs-modal-tool" id="qrs-modal-history" title="Scan history" aria-label="Scan history">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
+              </svg>
+            </button>
+            <button class="qrs-modal-close" aria-label="Close" id="qrs-close-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
         </div>
         <div class="qrs-modal-body qrs-modal-body--list">
           <div class="qrs-result-list">${items}</div>
         </div>
-        <div class="qrs-modal-actions">
-          <button class="qrs-btn qrs-btn--ghost" id="qrs-again-btn" type="button">Scan again</button>
+        <div class="qrs-modal-actions qrs-modal-actions--stack">
+          <button class="qrs-btn qrs-btn--primary" id="qrs-again-btn" type="button">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+            Scan again
+          </button>
         </div>
       </div>
     `;
@@ -634,12 +815,18 @@ function initSnip({ empty }) {
       dismissModal(modal, true)
     );
     document.getElementById("qrs-again-btn")?.addEventListener("click", scanAgain);
+    document.getElementById("qrs-modal-history")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openHistoryFromModal(modal);
+    });
 
     modal.querySelectorAll(".qrs-result-item").forEach((btn) => {
       btn.addEventListener("click", () => {
         const idx = Number(btn.dataset.index);
+        const showReview = pendingReviewPrompt;
+        pendingReviewPrompt = false;
         modal.remove();
-        showResultModal(results[idx]);
+        showResultModal(results[idx], { showReview });
       });
     });
 
@@ -649,6 +836,7 @@ function initSnip({ empty }) {
   }
 
   function dismissModal(modal, closeWindowAfter) {
+    dismissReviewPrompt(true);
     modal.classList.remove("qrs-modal--visible");
     setTimeout(() => {
       modal.remove();
@@ -677,9 +865,16 @@ function initSnip({ empty }) {
       <div class="qrs-history-header">
         <span class="qrs-history-title">Scan History</span>
         <div class="qrs-history-actions">
-          ${list.length ? `<button type="button" class="qrs-tool-btn" id="qrs-history-clear">Clear</button>` : ""}
-          <button type="button" class="qrs-tool-btn" id="qrs-history-close" aria-label="Close history">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square">
+          ${
+            list.length
+              ? `<button type="button" class="qrs-tool-btn qrs-tool-btn--danger" id="qrs-history-clear">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+                  Clear
+                </button>`
+              : ""
+          }
+          <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-history-close" aria-label="Close history">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
@@ -689,16 +884,25 @@ function initSnip({ empty }) {
         ${
           list.length
             ? list
-                .map(
-                  (e) => `
+                .map((e) => {
+                  const parsed = parsePayload(e.raw, e.format);
+                  return `
           <button type="button" class="qrs-history-item" data-id="${escapeHtml(e.id)}">
-            <div class="qrs-history-item-meta">
-              <span class="qrs-chip qrs-chip--format">${escapeHtml(formatLabel(e.format))}</span>
-              <span class="qrs-history-time">${escapeHtml(formatTime(e.timestamp))}</span>
+            <span class="qrs-history-item-icon" aria-hidden="true">${typeGlyph(parsed.type || e.type)}</span>
+            <div class="qrs-history-item-main">
+              <span class="qrs-history-preview">${escapeHtml(e.preview || e.raw)}</span>
+              <div class="qrs-history-item-meta">
+                <span class="qrs-chip qrs-chip--format" style="opacity:1;animation:none;height:22px;font-size:10.5px;padding:0 9px">${escapeHtml(formatLabel(e.format))}</span>
+                <span class="qrs-history-time">${escapeHtml(formatTime(e.timestamp))}</span>
+              </div>
             </div>
-            <span class="qrs-history-preview">${escapeHtml(e.preview || e.raw)}</span>
-          </button>`
-                )
+            <span class="qrs-history-item-aside">
+              <span class="qrs-history-chevron" aria-hidden="true">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </span>
+            </span>
+          </button>`;
+                })
                 .join("")
             : `<p class="qrs-history-empty">No scans yet. Snip a code to get started.</p>`
         }

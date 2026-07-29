@@ -1,4 +1,4 @@
-# QRSnip v2.2 — Chrome Web Store Listing
+# QRSnip v2.3 — Chrome Web Store Listing
 
 Copy these fields into the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 
@@ -63,7 +63,7 @@ English
   3. `03-multiformat-codes.png` — multi-format / multiple codes
   4. `04-history-panel.png` — history panel
 - [x] Smaller copies (640×400) in `store-assets/screenshots/640x400/`
-- [x] Store icon: 128×128 PNG (`icons/icon128.png` / `store-assets/store-icon-128.png`)
+- [x] Store icon: 128×128 PNG (`icons/icon128.png` / `store-assets/store-icon-128.png` from `store-icon-128-brand.png`)
 - [x] Small promo tile 440×280: `store-assets/promo/small-promo-440x280.png` (also `.jpg`; brand-only alt: `small-promo-440x280-brand.png`)
 - [x] Marquee promo tile 1400×560: `store-assets/promo/marquee-promo-1400x560.png` (also `.jpg`)
 - [ ] Privacy policy URL: host `index.html` publicly and paste that URL in the dashboard

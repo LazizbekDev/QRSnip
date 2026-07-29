@@ -35,7 +35,7 @@ python3 - <<'PY'
 import json, os, sys
 m = json.load(open("dist/staging/manifest.json"))
 assert m["manifest_version"] == 3
-assert m["version"] == "2.2.0", m["version"]
+assert m["version"] == "2.3.0", m["version"]
 assert "tabs" not in m.get("permissions", []), "tabs permission should be removed"
 assert "<all_urls>" not in m.get("host_permissions", []), "<all_urls> should stay removed"
 assert "file:///*" in m.get("host_permissions", []), "file:///* required for local PDFs"
