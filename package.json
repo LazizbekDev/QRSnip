@@ -5,6 +5,7 @@
   "description": "QRSnip Chrome extension — screen QR & barcode scanner",
   "scripts": {
     "build:decoder": "node scripts/build-decoder.mjs",
+    "check:permissions": "node scripts/check-unused-permissions.mjs",
     "pack": "npm run build:decoder && bash pack.sh"
   },
   "repository": {

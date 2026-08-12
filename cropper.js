@@ -8,14 +8,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Empty state — allow drop/paste without a prior capture
     bgImg.style.display = "none";
     document.body.classList.add("qrs-empty");
-    initSnip({ empty: true });
+    void initSnip({ empty: true });
     return;
   }
 
-  bgImg.onload = () => initSnip({ empty: false });
+  bgImg.onload = () => {
+    void initSnip({ empty: false });
+  };
   bgImg.onerror = () => {
     showBootstrapToast("Failed to load screenshot.");
-    initSnip({ empty: true });
+    void initSnip({ empty: true });
   };
   bgImg.src = data.capturedImage;
 
@@ -37,9 +39,23 @@ function initSnip({ empty }) {
   let guideLines = null;
   let modalOpen = false;
   let historyOpen = false;
+  let settingsOpen = false;
+  let keepOpenAfterCopy = false;
+  let autoScanEnabled = true;
+  let manualSnipEnabled = true;
+  let autoScanRunning = false;
+  let autoscanFoundCodes = false;
   let currentResults = [];
   let pendingReviewPrompt = false;
   let keyHandler = null;
+
+  void getSettings().then((s) => {
+    keepOpenAfterCopy = s.keepOpenAfterCopy;
+    autoScanEnabled = s.autoScanEnabled;
+    manualSnipEnabled = s.manualSnipEnabled;
+    syncOverlaySnipState();
+    if (!empty && autoScanEnabled) void runAutoScan();
+  });
 
   buildOverlay();
   bindGlobalDropPaste();
@@ -85,6 +101,13 @@ function initSnip({ empty }) {
         </svg>
         History
       </button>
+      <button type="button" class="qrs-tool-btn" id="qrs-settings-btn" title="Settings">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/>
+          <circle cx="12" cy="12" r="3"/>
+        </svg>
+        Settings
+      </button>
       <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-close-tool" title="Close" aria-label="Close">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -119,6 +142,10 @@ function initSnip({ empty }) {
       e.stopPropagation();
       openHistoryPanel();
     });
+    document.getElementById("qrs-settings-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      openSettingsPanel();
+    });
     document.getElementById("qrs-close-tool").addEventListener("click", (e) => {
       e.stopPropagation();
       closeWindow();
@@ -126,13 +153,40 @@ function initSnip({ empty }) {
   }
 
   function closeWindow() {
-    window.close();
+    chrome.runtime.sendMessage({ type: "qrsnip-close" }, () => {
+      if (chrome.runtime.lastError) {
+        window.close();
+      }
+    });
+  }
+
+  function canManualSnip() {
+    if (!autoScanEnabled) return true;
+    if (!manualSnipEnabled && autoscanFoundCodes) return false;
+    return true;
+  }
+
+  function syncOverlaySnipState() {
+    if (!overlay) return;
+    overlay.classList.toggle("qrs-overlay--nosnip", !canManualSnip());
+    if (!canManualSnip()) {
+      overlay.classList.remove("qrs-overlay--selecting");
+      selBox?.classList.remove("qrs-selbox--active");
+    }
   }
 
   // ─── Mouse ───────────────────────────────────────────────────────────────
   function onMouseDown(e) {
-    if (modalOpen || historyOpen) return;
-    if (e.target.closest("#qrs-dock") || e.target.closest("#qrs-history-panel")) return;
+    if (modalOpen || historyOpen || settingsOpen) return;
+    if (
+      e.target.closest("#qrs-dock") ||
+      e.target.closest("#qrs-history-panel") ||
+      e.target.closest("#qrs-settings-panel") ||
+      e.target.closest(".qrs-autoscan-chip")
+    ) {
+      return;
+    }
+    if (!canManualSnip()) return;
 
     e.preventDefault();
     isSelecting = true;
@@ -179,6 +233,10 @@ function initSnip({ empty }) {
 
   function onKeyDown(e) {
     if (e.key === "Escape") {
+      if (settingsOpen) {
+        closeSettingsPanel();
+        return;
+      }
       if (historyOpen) {
         closeHistoryPanel();
         return;
@@ -230,11 +288,216 @@ function initSnip({ empty }) {
     const modal = document.getElementById("qrs-modal");
     if (modal) dismissModal(modal, false);
     resetSelection();
+    clearAutoscanChips();
+    overlay?.classList.remove("qrs-overlay--autoscan");
     modalOpen = false;
+    if (autoScanEnabled) void runAutoScan();
+  }
+
+  // ─── Image coordinate helpers (object-fit: contain, top-left) ───────────
+  function getDisplayedImageRect(img) {
+    const elW = img.clientWidth;
+    const elH = img.clientHeight;
+    const natW = img.naturalWidth || 1;
+    const natH = img.naturalHeight || 1;
+    const scale = Math.min(elW / natW, elH / natH);
+    return {
+      x: 0,
+      y: 0,
+      width: natW * scale,
+      height: natH * scale,
+      scale,
+    };
+  }
+
+  function viewportRectToNatural(img, rect) {
+    const disp = getDisplayedImageRect(img);
+    const scale = disp.scale;
+    return {
+      x: (rect.x - disp.x) / scale,
+      y: (rect.y - disp.y) / scale,
+      width: rect.width / scale,
+      height: rect.height / scale,
+    };
+  }
+
+  function naturalBboxToViewport(img, bbox) {
+    const disp = getDisplayedImageRect(img);
+    const scale = disp.scale;
+    return {
+      cx: disp.x + (bbox.x + bbox.width / 2) * scale,
+      cy: disp.y + (bbox.y + bbox.height / 2) * scale,
+      width: bbox.width * scale,
+      height: bbox.height * scale,
+    };
+  }
+
+  function truncatePreview(text, max) {
+    const s = String(text || "");
+    if (s.length <= max) return s;
+    return s.slice(0, max - 1) + "…";
+  }
+
+  function setDockHintText(text) {
+    const hint = document.getElementById("qrs-dock-hint");
+    if (!hint) return;
+    hint.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/>
+      </svg>
+      ${escapeHtml(text)}`;
+  }
+
+  function clearAutoscanChips() {
+    overlay?.querySelectorAll(".qrs-autoscan-chip").forEach((el) => el.remove());
+    document.getElementById("qrs-autoscan-fx")?.remove();
+    autoscanFoundCodes = false;
+    syncOverlaySnipState();
+  }
+
+  function ensureAutoscanFx() {
+    let fx = document.getElementById("qrs-autoscan-fx");
+    if (fx) return fx;
+
+    fx = document.createElement("div");
+    fx.id = "qrs-autoscan-fx";
+    fx.className = "qrs-autoscan-fx";
+    fx.innerHTML = `
+      <div class="qrs-autoscan-dim" aria-hidden="true"></div>
+      <div class="qrs-autoscan-noise" aria-hidden="true"></div>
+      <div class="qrs-autoscan-border" aria-hidden="true"></div>
+      <div class="qrs-autoscan-beam" aria-hidden="true"></div>
+      <div class="qrs-autoscan-beam-trail" aria-hidden="true"></div>
+    `;
+    overlay.insertBefore(fx, overlay.firstChild);
+    return fx;
+  }
+
+  function startAutoscanFx() {
+    const fx = ensureAutoscanFx();
+    overlay.insertBefore(fx, overlay.firstChild);
+    fx.classList.remove("qrs-autoscan-fx--done");
+    fx.classList.add("qrs-autoscan-fx--scanning");
+    return fx;
+  }
+
+  function finishAutoscanFx() {
+    const fx = document.getElementById("qrs-autoscan-fx");
+    if (!fx) return;
+    fx.classList.remove("qrs-autoscan-fx--scanning");
+    fx.classList.add("qrs-autoscan-fx--done");
+  }
+
+  function autoscanDockHint(count) {
+    if (count === 0) {
+      return empty ? "Drop or paste an image" : "No codes found — drag to select";
+    }
+    const base =
+      count === 1 ? "1 code found" : `${count} codes found`;
+    if (canManualSnip()) return `${base} · tap or drag to scan`;
+    return `${base} · tap a code`;
+  }
+
+  function autoscanChipIcon(type) {
+    return typeGlyph(type).replace(/width="18" height="18"/g, 'width="14" height="14"');
+  }
+
+  async function openAutoscanResult(det) {
+    const parsed = parsePayload(det.rawValue, det.format);
+    currentResults = [parsed];
+    await addHistoryEntry({ format: parsed.format, type: parsed.type, raw: parsed.raw });
+    pendingReviewPrompt = await noteSuccessfulScan();
+    const showReview = pendingReviewPrompt;
+    pendingReviewPrompt = false;
+    showResultModal(parsed, { showReview });
+  }
+
+  function renderAutoscanChips(detections) {
+    overlay?.querySelectorAll(".qrs-autoscan-chip").forEach((el) => el.remove());
+
+    const img = document.getElementById("screenshot-bg");
+
+    detections.forEach((det, index) => {
+      const parsed = parsePayload(det.rawValue, det.format);
+      const vp = naturalBboxToViewport(img, det.bbox);
+      const preview = truncatePreview(parsed.display, 32);
+
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "qrs-autoscan-chip";
+      chip.style.left = `${vp.cx}px`;
+      chip.style.top = `${vp.cy}px`;
+      chip.style.animationDelay = `${index * 45}ms`;
+      chip.innerHTML = `
+        <span class="qrs-autoscan-chip-icon" aria-hidden="true">${autoscanChipIcon(parsed.type)}</span>
+        <span class="qrs-autoscan-chip-text">${escapeHtml(preview)}</span>
+      `;
+      chip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        void openAutoscanResult(det);
+      });
+      overlay.appendChild(chip);
+    });
+  }
+
+  async function runAutoScan() {
+    if (autoScanRunning || modalOpen) return;
+
+    const img = document.getElementById("screenshot-bg");
+    if (!img?.src || img.style.display === "none" || !img.naturalWidth) return;
+
+    autoScanRunning = true;
+    autoscanFoundCodes = false;
+    clearAutoscanChips();
+    overlay.classList.add("qrs-overlay--autoscan");
+    syncOverlaySnipState();
+    startAutoscanFx();
+
+    setDockHintText("Scanning screen…");
+
+    const scanDuration = 1600;
+
+    try {
+      await initDecoder();
+      const [detections] = await Promise.all([
+        detectCodesWithBounds(img),
+        sleep(scanDuration),
+      ]);
+
+      finishAutoscanFx();
+
+      if (!detections.length) {
+        overlay.classList.remove("qrs-overlay--autoscan");
+        document.getElementById("qrs-autoscan-fx")?.remove();
+        setDockHintText(autoscanDockHint(0));
+        showToast("No codes found — drag to select an area.", "info");
+        autoScanRunning = false;
+        return;
+      }
+
+      autoscanFoundCodes = true;
+      syncOverlaySnipState();
+      renderAutoscanChips(detections);
+      setDockHintText(autoscanDockHint(detections.length));
+    } catch (err) {
+      console.error("[QRSnip] Auto-scan failed:", err);
+      finishAutoscanFx();
+      overlay.classList.remove("qrs-overlay--autoscan");
+      document.getElementById("qrs-autoscan-fx")?.remove();
+      autoscanFoundCodes = false;
+      syncOverlaySnipState();
+      setDockHintText("Drag around a code to scan");
+      showToast("Auto-scan failed — try dragging to select.", "error");
+    }
+
+    autoScanRunning = false;
   }
 
   // ─── Capture & Decode ────────────────────────────────────────────────────
   async function captureSelection(rect) {
+    clearAutoscanChips();
+    overlay?.classList.remove("qrs-overlay--autoscan");
+
     const scanEl = buildScanAnimation(rect);
     overlay.appendChild(scanEl);
 
@@ -256,16 +519,14 @@ function initSnip({ empty }) {
     canvas.height = Math.max(1, Math.round(rect.height * dpr));
     const ctx = canvas.getContext("2d");
 
-    // Map viewport coords to natural image pixels (object-fit: contain, top-left)
-    const scaleX = img.naturalWidth / img.clientWidth;
-    const scaleY = img.naturalHeight / img.clientHeight;
+    const natRect = viewportRectToNatural(img, rect);
 
     ctx.drawImage(
       img,
-      rect.x * scaleX,
-      rect.y * scaleY,
-      rect.width * scaleX,
-      rect.height * scaleY,
+      natRect.x,
+      natRect.y,
+      natRect.width,
+      natRect.height,
       0,
       0,
       canvas.width,
@@ -422,7 +683,7 @@ function initSnip({ empty }) {
     });
 
     const hint = document.getElementById("qrs-dock-hint");
-    if (hint) {
+    if (hint && !autoScanEnabled) {
       hint.innerHTML = `
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/>
@@ -430,8 +691,11 @@ function initSnip({ empty }) {
         Drag around a code to scan`;
     }
 
-    // Auto-detect full image first; user can still snip
-    await detectFromImageElement(bgImg);
+    if (autoScanEnabled) {
+      await runAutoScan();
+    } else {
+      await detectFromImageElement(bgImg);
+    }
   }
 
   function readFileAsDataURL(file) {
@@ -646,7 +910,9 @@ function initSnip({ empty }) {
     const doCopy = async (btn) => {
       await navigator.clipboard.writeText(parsed.copyValue);
       if (btn) markCopied(btn);
-      setTimeout(() => dismissModal(modal, true), 900);
+      if (!keepOpenAfterCopy) {
+        setTimeout(() => dismissModal(modal, true), 900);
+      }
     };
 
     const copyBtn = document.getElementById("qrs-copy-btn");
@@ -668,7 +934,9 @@ function initSnip({ empty }) {
         const result = await runPrimaryAction(parsed.primary);
         if (result === "copied") {
           markCopied(primaryBtn);
-          setTimeout(() => dismissModal(modal, true), 900);
+          if (!keepOpenAfterCopy) {
+            setTimeout(() => dismissModal(modal, true), 900);
+          }
         } else if (result === "opened") {
           dismissModal(modal, true);
         }
@@ -855,6 +1123,7 @@ function initSnip({ empty }) {
       closeHistoryPanel();
       return;
     }
+    closeSettingsPanel();
     historyOpen = true;
     document.getElementById("qrs-history-panel")?.remove();
 
@@ -942,6 +1211,130 @@ function initSnip({ empty }) {
     setTimeout(() => {
       panel.remove();
       historyOpen = false;
+    }, 220);
+  }
+
+  async function getShortcutLabel() {
+    try {
+      const cmds = await chrome.commands.getAll();
+      const cmd = cmds.find((c) => c.name === "_execute_action");
+      if (cmd?.shortcut) return cmd.shortcut;
+      return "Not set";
+    } catch (_) {
+      return "Alt+Q";
+    }
+  }
+
+  // ─── Settings Panel ────────────────────────────────────────────────────────
+  async function openSettingsPanel() {
+    if (settingsOpen) {
+      closeSettingsPanel();
+      return;
+    }
+    closeHistoryPanel();
+    settingsOpen = true;
+    document.getElementById("qrs-settings-panel")?.remove();
+
+    const settings = await getSettings();
+    const shortcutLabel = await getShortcutLabel();
+    keepOpenAfterCopy = settings.keepOpenAfterCopy;
+    autoScanEnabled = settings.autoScanEnabled;
+    manualSnipEnabled = settings.manualSnipEnabled;
+
+    const panel = document.createElement("div");
+    panel.id = "qrs-settings-panel";
+    panel.innerHTML = `
+      <div class="qrs-settings-header">
+        <span class="qrs-settings-title">Settings</span>
+        <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-settings-close" aria-label="Close settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <label class="qrs-settings-row" for="qrs-setting-autoscan">
+        <input type="checkbox" id="qrs-setting-autoscan" class="qrs-settings-checkbox" ${
+          settings.autoScanEnabled ? "checked" : ""
+        } />
+        <span class="qrs-settings-label">
+          <span class="qrs-settings-label-title">Auto-scan screen</span>
+          <span class="qrs-settings-label-hint">Automatically find all codes on the screen when you open the scanner</span>
+        </span>
+      </label>
+      <label class="qrs-settings-row" for="qrs-setting-manual-snip">
+        <input type="checkbox" id="qrs-setting-manual-snip" class="qrs-settings-checkbox" ${
+          settings.manualSnipEnabled ? "checked" : ""
+        } />
+        <span class="qrs-settings-label">
+          <span class="qrs-settings-label-title">Allow manual crop after auto-scan</span>
+          <span class="qrs-settings-label-hint">Drag to select a code after auto-scan finds results on screen</span>
+        </span>
+      </label>
+      <label class="qrs-settings-row" for="qrs-setting-keep-open">
+        <input type="checkbox" id="qrs-setting-keep-open" class="qrs-settings-checkbox" ${
+          settings.keepOpenAfterCopy ? "checked" : ""
+        } />
+        <span class="qrs-settings-label">
+          <span class="qrs-settings-label-title">Keep scanner open after copying</span>
+          <span class="qrs-settings-label-hint">Copy a link, then open it from the result without rescanning</span>
+        </span>
+      </label>
+      <div class="qrs-settings-shortcut">
+        <div class="qrs-settings-shortcut-row">
+          <span class="qrs-settings-label-title">Keyboard shortcut</span>
+          <kbd class="qrs-kbd">${escapeHtml(shortcutLabel)}</kbd>
+        </div>
+        <p class="qrs-settings-label-hint">If the shortcut does not work, set it once at chrome://extensions/shortcuts</p>
+        <button type="button" class="qrs-btn qrs-btn--ghost qrs-settings-shortcut-btn" id="qrs-open-shortcuts">Set shortcut</button>
+      </div>
+    `;
+
+    document.documentElement.appendChild(panel);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => panel.classList.add("qrs-settings-panel--visible"));
+    });
+
+    document.getElementById("qrs-settings-close")?.addEventListener("click", closeSettingsPanel);
+    document.getElementById("qrs-setting-autoscan")?.addEventListener("change", async (e) => {
+      const next = await setAutoScanEnabled(e.target.checked);
+      autoScanEnabled = next.autoScanEnabled;
+      if (autoScanEnabled) {
+        void runAutoScan();
+      } else {
+        clearAutoscanChips();
+        overlay?.classList.remove("qrs-overlay--autoscan");
+        syncOverlaySnipState();
+        setDockHintText("Drag around a code to scan");
+      }
+    });
+    document.getElementById("qrs-setting-manual-snip")?.addEventListener("change", async (e) => {
+      const next = await setManualSnipEnabled(e.target.checked);
+      manualSnipEnabled = next.manualSnipEnabled;
+      syncOverlaySnipState();
+      if (autoscanFoundCodes) {
+        const count = overlay?.querySelectorAll(".qrs-autoscan-chip").length || 0;
+        setDockHintText(autoscanDockHint(count));
+      }
+    });
+    document.getElementById("qrs-setting-keep-open")?.addEventListener("change", async (e) => {
+      const next = await setKeepOpenAfterCopy(e.target.checked);
+      keepOpenAfterCopy = next.keepOpenAfterCopy;
+    });
+    document.getElementById("qrs-open-shortcuts")?.addEventListener("click", () => {
+      chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+    });
+  }
+
+  function closeSettingsPanel() {
+    const panel = document.getElementById("qrs-settings-panel");
+    if (!panel) {
+      settingsOpen = false;
+      return;
+    }
+    panel.classList.remove("qrs-settings-panel--visible");
+    setTimeout(() => {
+      panel.remove();
+      settingsOpen = false;
     }, 220);
   }
 

@@ -139,30 +139,73 @@ function initDecoder() {
 }
 
 /**
- * Detect barcodes using native API and/or ZXing WASM. Dedupes by raw value.
- * @param {HTMLCanvasElement | HTMLImageElement} source
- * @returns {Promise<{ rawValue: string, format: string }[]>}
+ * @param {{ x: number, y: number }[]} points
+ * @returns {{ x: number, y: number, width: number, height: number } | null}
  */
-async function detectCodes(source) {
+function bboxFromPoints(points) {
+  if (!points?.length) return null;
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const width = maxX - minX;
+  const height = maxY - minY;
+  if (width <= 0 || height <= 0) return null;
+  return { x: minX, y: minY, width, height };
+}
+
+/**
+ * @param {{ x: number, y: number, width: number, height: number }} bbox
+ * @returns {number}
+ */
+function bboxArea(bbox) {
+  return bbox.width * bbox.height;
+}
+
+/**
+ * Detect barcodes with bounding boxes in natural image pixel coordinates.
+ * @param {HTMLCanvasElement | HTMLImageElement} source
+ * @returns {Promise<{ rawValue: string, format: string, bbox: { x: number, y: number, width: number, height: number } }[]>}
+ */
+async function detectCodesWithBounds(source) {
   await initDecoder();
 
   const canvas = toCanvas(source);
-  /** @type {{ rawValue: string, format: string }[]} */
-  const results = [];
-  const seen = new Set();
+  /** @type {Map<string, { rawValue: string, format: string, bbox: { x: number, y: number, width: number, height: number } }>} */
+  const byValue = new Map();
 
-  const push = (rawValue, format) => {
+  const push = (rawValue, format, bbox) => {
     const text = (rawValue || "").trim();
-    if (!text || seen.has(text)) return;
-    seen.add(text);
-    results.push({ rawValue: text, format: normalizeFormat(format) });
+    if (!text || !bbox) return;
+    const fmt = normalizeFormat(format);
+    const existing = byValue.get(text);
+    if (!existing) {
+      byValue.set(text, { rawValue: text, format: fmt, bbox });
+      return;
+    }
+    if (bboxArea(bbox) > bboxArea(existing.bbox)) {
+      existing.bbox = bbox;
+    }
   };
 
   if (nativeDetector) {
     try {
       const barcodes = await nativeDetector.detect(canvas);
       for (const b of barcodes) {
-        push(b.rawValue || "", b.format || "unknown");
+        let bbox = null;
+        if (b.boundingBox) {
+          bbox = {
+            x: b.boundingBox.x,
+            y: b.boundingBox.y,
+            width: b.boundingBox.width,
+            height: b.boundingBox.height,
+          };
+        } else if (b.cornerPoints?.length) {
+          bbox = bboxFromPoints(b.cornerPoints);
+        }
+        push(b.rawValue || "", b.format || "unknown", bbox);
       }
     } catch (err) {
       console.warn("[QRSnip] Native detect failed:", err);
@@ -177,14 +220,28 @@ async function detectCodes(source) {
       for (const r of zxResults || []) {
         if (r && r.isValid === false) continue;
         const text = r.text || "";
-        push(text, r.format || "unknown");
+        const pos = r.position;
+        const bbox = pos
+          ? bboxFromPoints([pos.topLeft, pos.topRight, pos.bottomRight, pos.bottomLeft])
+          : null;
+        push(text, r.format || "unknown", bbox);
       }
     } catch (err) {
       console.warn("[QRSnip] ZXing detect failed:", err);
     }
   }
 
-  return results;
+  return Array.from(byValue.values());
+}
+
+/**
+ * Detect barcodes using native API and/or ZXing WASM. Dedupes by raw value.
+ * @param {HTMLCanvasElement | HTMLImageElement} source
+ * @returns {Promise<{ rawValue: string, format: string }[]>}
+ */
+async function detectCodes(source) {
+  const withBounds = await detectCodesWithBounds(source);
+  return withBounds.map(({ rawValue, format }) => ({ rawValue, format }));
 }
 
 /**

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QRSnip: QR Code & Barcode Scanner",
-  "version": "2.3.0",
+  "version": "2.5.3",
   "description": "Scan QR codes & barcodes from any screen snip or image. Multi-format, smart actions, local history. 100% offline.",
   "offline_enabled": true,
   "action": {
@@ -23,7 +23,8 @@
   "permissions": [
     "activeTab",
     "storage",
-    "contextMenus"
+    "contextMenus",
+    "tabs"
   ],
   "host_permissions": [
     "file:///*"
@@ -37,7 +38,7 @@
         "default": "Alt+Q",
         "mac": "Alt+Q"
       },
-      "description": "Activate QRSnip snipping tool"
+      "description": "Capture screen and scan QR codes"
     }
   }
 }

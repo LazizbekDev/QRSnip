@@ -1,4 +1,4 @@
-# QRSnip v2.3 — Chrome Web Store Listing
+# QRSnip v2.5.3 — Chrome Web Store Listing
 
 Copy these fields into the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 
@@ -31,13 +31,16 @@ What makes QRSnip different?
 • Reads 30+ barcode formats: QR, Micro QR, rMQR, Data Matrix, Aztec, MaxiCode, PDF417, EAN/UPC, Code 128/39/93, GS1 DataBar, Telepen, Code 32, PZN, and more
 • Detects multiple codes in a single selection
 • Local scan history you can revisit or clear anytime
+• Auto-scan screen — finds every code on the page automatically (Samsung-style); tap a chip or drag to refine
 • Keyboard shortcut: Alt+Q (⌥Q on Mac) — scan without leaving the tab
 • Minimal permissions — the extension only accesses the page when you activate it
 
 How to use
-1. Click the QRSnip icon or press Alt+Q (⌥Q on Mac)
-2. Drag a selection around the code on your screen
+1. Click the QRSnip icon or press Alt+Q (⌥Q on Mac). If auto-scan is on, codes appear as chips on screen — tap one, or drag to select manually.
+2. Drag a selection around a code if needed
 3. Copy, open the link, or use the smart action — or tap Scan again
+
+If Alt+Q does not work, set the shortcut once at chrome://extensions/shortcuts.
 
 Privacy
 Screenshots and decoded data never leave your device. Scan history stays in local storage only. Decoding uses local browser APIs and a bundled open-source WebAssembly engine — nothing is sent to a server. We collect nothing.
@@ -76,8 +79,9 @@ Upload order in the Dashboard: 01 → 02 → 03 → 04.
 | Permission | Justification |
 |---|---|
 | activeTab | Capture the current tab screenshot only when the user clicks the action, shortcut, or context menu, so codes on screen (including web PDFs) can be scanned locally. |
-| storage | Temporarily store the screenshot during the scan flow; optionally keep a local scan history on-device. |
+| storage | Temporarily store the screenshot during the scan flow; optionally keep a local scan history and settings on-device. |
 | contextMenus | Provide "Scan with QRSnip" when right-clicking an image. |
+| tabs | Open the scanner in a separate tab and return focus to the page that was scanned when the scanner is closed. |
 | file:///* | Scan QR/barcodes in local PDF files and images opened via the file:// protocol. Users must also enable "Allow access to file URLs". |
 
 **Not requested:** `<all_urls>` — http(s) pages are covered by activeTab on user gesture.
