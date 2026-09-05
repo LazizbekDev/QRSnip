@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: Сканер QR и штрихкодов"
+  },
+  "extDescription": {
+    "message": "Сканируйте QR и штрихкоды с экрана или изображения. Много форматов, умные действия, история. 100% офлайн."
+  },
+  "actionTitle": {
+    "message": "QRSnip — Alt+Q для скана"
+  },
+  "contextMenuScan": {
+    "message": "Сканировать в QRSnip"
+  },
+  "commandDescription": {
+    "message": "Сделать снимок экрана и сканировать QR-коды"
+  }
+}

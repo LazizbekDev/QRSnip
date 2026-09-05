@@ -1,6 +1,9 @@
 // ─── QRSnip · Cropper Interface ─────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", async () => {
+  const settings = await getSettings();
+  initI18n(settings.language);
+
   const data = await chrome.storage.local.get(["capturedImage", "scanSource"]);
   const bgImg = document.getElementById("screenshot-bg");
 
@@ -16,7 +19,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     void initSnip({ empty: false });
   };
   bgImg.onerror = () => {
-    showBootstrapToast("Failed to load screenshot.");
+    showBootstrapToast(t("toast_screenshot_fail"));
     void initSnip({ empty: true });
   };
   bgImg.src = data.capturedImage;
@@ -59,7 +62,7 @@ function initSnip({ empty }) {
   bindGlobalDropPaste();
   initDecoder().catch((err) => {
     console.error("[QRSnip] Decoder init failed:", err);
-    showToast("Barcode decoder unavailable in this browser.", "error");
+    showToast(t("toast_decoder_unavailable"), "error");
   });
 
   // ─── Overlay ─────────────────────────────────────────────────────────────
@@ -68,7 +71,7 @@ function initSnip({ empty }) {
     overlay.id = "qrs-overlay";
     overlay.className = "qrs-overlay--enter";
     overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-label", "QRSnip — draw a selection");
+    overlay.setAttribute("aria-label", t("overlay_aria"));
 
     guideLines = document.createElement("div");
     guideLines.id = "qrs-guides";
@@ -83,30 +86,26 @@ function initSnip({ empty }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/>
         </svg>
-        ${
-          empty
-            ? "Drop or paste an image"
-            : "Drag around a code to scan"
-        }
+        ${escapeHtml(empty ? t("hint_drop") : t("hint_drag"))}
       </span>
       <span class="qrs-dock-sep" aria-hidden="true"></span>
       <kbd class="qrs-kbd">Esc</kbd>
-      <span class="qrs-dock-muted">Cancel</span>
+      <span class="qrs-dock-muted">${escapeHtml(t("cancel"))}</span>
       <span class="qrs-dock-spacer"></span>
-      <button type="button" class="qrs-tool-btn" id="qrs-history-btn" title="Scan history">
+      <button type="button" class="qrs-tool-btn" id="qrs-history-btn" title="${escapeHtml(t("scan_history"))}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
         </svg>
-        History
+        ${escapeHtml(t("history"))}
       </button>
-      <button type="button" class="qrs-tool-btn" id="qrs-settings-btn" title="Settings">
+      <button type="button" class="qrs-tool-btn" id="qrs-settings-btn" title="${escapeHtml(t("settings"))}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/>
           <circle cx="12" cy="12" r="3"/>
         </svg>
-        Settings
+        ${escapeHtml(t("settings"))}
       </button>
-      <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-close-tool" title="Close" aria-label="Close">
+      <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-close-tool" title="${escapeHtml(t("close"))}" aria-label="${escapeHtml(t("close"))}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
@@ -387,12 +386,12 @@ function initSnip({ empty }) {
 
   function autoscanDockHint(count) {
     if (count === 0) {
-      return empty ? "Drop or paste an image" : "No codes found — drag to select";
+      return empty ? t("hint_drop") : t("hint_no_codes");
     }
-    const base =
-      count === 1 ? "1 code found" : `${count} codes found`;
-    if (canManualSnip()) return `${base} · tap or drag to scan`;
-    return `${base} · tap a code`;
+    if (canManualSnip()) {
+      return count === 1 ? t("hint_one_found") : t("hint_many_found", { n: count });
+    }
+    return count === 1 ? t("hint_one_tap") : t("hint_many_tap", { n: count });
   }
 
   function autoscanChipIcon(type) {
@@ -449,7 +448,7 @@ function initSnip({ empty }) {
     overlay.classList.add("qrs-overlay--autoscan");
     syncOverlaySnipState();
     startAutoscanFx();
-    setDockHintText("Detecting…");
+    setDockHintText(t("hint_detecting"));
 
     const fxStarted = performance.now();
     const MIN_FX_MS = 450;
@@ -466,7 +465,7 @@ function initSnip({ empty }) {
         overlay.classList.remove("qrs-overlay--autoscan");
         document.getElementById("qrs-autoscan-fx")?.remove();
         setDockHintText(autoscanDockHint(0));
-        showToast("No codes found — drag to select an area.", "info");
+        showToast(t("toast_no_codes_area"), "info");
         autoScanRunning = false;
         return;
       }
@@ -482,8 +481,8 @@ function initSnip({ empty }) {
       document.getElementById("qrs-autoscan-fx")?.remove();
       autoscanFoundCodes = false;
       syncOverlaySnipState();
-      setDockHintText("Drag around a code to scan");
-      showToast("Auto-scan failed — try dragging to select.", "error");
+      setDockHintText(t("hint_drag"));
+      showToast(t("toast_autoscan_failed"), "error");
     }
 
     autoScanRunning = false;
@@ -504,7 +503,7 @@ function initSnip({ empty }) {
     const img = document.getElementById("screenshot-bg");
     if (!img || !img.src || img.style.display === "none") {
       scanEl.remove();
-      showToast("No image to scan — drop or paste one first.", "info");
+      showToast(t("toast_no_image"), "info");
       resetSelection();
       return;
     }
@@ -540,7 +539,7 @@ function initSnip({ empty }) {
     try {
       await initDecoder();
     } catch (_) {
-      showToast("Barcode decoder unavailable in this browser.", "error");
+      showToast(t("toast_decoder_unavailable"), "error");
       resetSelection();
       return;
     }
@@ -549,13 +548,13 @@ function initSnip({ empty }) {
     try {
       barcodes = await detectCodes(canvas);
     } catch (_) {
-      showToast("Decode error — try a clearer selection.", "error");
+      showToast(t("toast_decode_error"), "error");
       resetSelection();
       return;
     }
 
     if (!barcodes.length) {
-      showToast("No code found — try a tighter crop or better contrast.", "info");
+      showToast(t("toast_no_code_crop"), "info");
       resetSelection();
       return;
     }
@@ -585,7 +584,7 @@ function initSnip({ empty }) {
     try {
       await initDecoder();
     } catch (_) {
-      showToast("Barcode decoder unavailable in this browser.", "error");
+      showToast(t("toast_decoder_unavailable"), "error");
       return;
     }
 
@@ -605,7 +604,7 @@ function initSnip({ empty }) {
       barcodes = await detectCodes(imgEl);
     } catch (_) {
       scanEl.remove();
-      showToast("Decode error — try another image.", "error");
+      showToast(t("toast_decode_image"), "error");
       return;
     }
 
@@ -614,7 +613,7 @@ function initSnip({ empty }) {
     scanEl.remove();
 
     if (!barcodes.length) {
-      showToast("No code found in this image.", "info");
+      showToast(t("toast_no_code_image"), "info");
       return;
     }
 
@@ -680,11 +679,7 @@ function initSnip({ empty }) {
 
     const hint = document.getElementById("qrs-dock-hint");
     if (hint && !autoScanEnabled) {
-      hint.innerHTML = `
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/>
-        </svg>
-        Drag around a code to scan`;
+      setDockHintText(t("hint_drag"));
     }
 
     if (autoScanEnabled) {
@@ -753,19 +748,19 @@ function initSnip({ empty }) {
             </svg>
           </span>
           <div class="qrs-modal-titles">
-            <span class="qrs-modal-label">Code Detected</span>
+            <span class="qrs-modal-label">${escapeHtml(t("code_detected"))}</span>
             <div class="qrs-chips">
               <span class="qrs-chip qrs-chip--format" style="animation-delay:40ms">${typeChipIcon(parsed.type)}${escapeHtml(parsed.formatLabel)}</span>
               <span class="qrs-chip qrs-chip--type" style="animation-delay:90ms">${escapeHtml(parsed.typeLabel)}</span>
             </div>
           </div>
           <div class="qrs-modal-header-actions">
-            <button type="button" class="qrs-modal-tool" id="qrs-modal-history" title="Scan history" aria-label="Scan history">
+            <button type="button" class="qrs-modal-tool" id="qrs-modal-history" title="${escapeHtml(t("scan_history"))}" aria-label="${escapeHtml(t("scan_history"))}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
               </svg>
             </button>
-            <button class="qrs-modal-close" aria-label="Close" id="qrs-close-btn">
+            <button class="qrs-modal-close" aria-label="${escapeHtml(t("close"))}" id="qrs-close-btn">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
@@ -776,7 +771,7 @@ function initSnip({ empty }) {
         <div class="qrs-modal-body">
           <div class="qrs-result-plate">
             <p class="qrs-result-text">${escapeHtml(parsed.display)}</p>
-            <button type="button" class="qrs-result-copy-inline" id="qrs-copy-inline" title="Copy" aria-label="Copy">
+            <button type="button" class="qrs-result-copy-inline" id="qrs-copy-inline" title="${escapeHtml(t("copy"))}" aria-label="${escapeHtml(t("copy"))}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
               </svg>
@@ -787,7 +782,7 @@ function initSnip({ empty }) {
         <div class="qrs-modal-actions">
           <button class="qrs-btn qrs-btn--ghost" id="qrs-again-btn" type="button">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-            Scan again
+            ${escapeHtml(t("scan_again"))}
           </button>
           ${
             primaryIsCopy
@@ -796,7 +791,7 @@ function initSnip({ empty }) {
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
                   </svg>
-                  Copy
+                  ${escapeHtml(t("copy"))}
                 </button>`
           }
           ${
@@ -805,7 +800,7 @@ function initSnip({ empty }) {
                   ${primaryActionIcon(primary.id)}
                   ${escapeHtml(primary.label)}
                 </button>`
-              : `<button class="qrs-btn qrs-btn--primary" id="qrs-copy-btn" type="button">Copy</button>`
+              : `<button class="qrs-btn qrs-btn--primary" id="qrs-copy-btn" type="button">${escapeHtml(t("copy"))}</button>`
           }
         </div>
       </div>
@@ -842,7 +837,7 @@ function initSnip({ empty }) {
     el.setAttribute("aria-label", "Feedback");
     el.innerHTML = `
       <div class="qrs-review-card">
-        <button type="button" class="qrs-review-dismiss" id="qrs-review-dismiss" aria-label="Dismiss">
+        <button type="button" class="qrs-review-dismiss" id="qrs-review-dismiss" aria-label="${escapeHtml(t("dismiss"))}">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -853,12 +848,12 @@ function initSnip({ empty }) {
           </svg>
         </div>
         <div class="qrs-review-copy">
-          <p class="qrs-review-title">Finding QRSnip useful?</p>
-          <p class="qrs-review-sub">Your feedback helps others discover a private, offline scanner.</p>
+          <p class="qrs-review-title">${escapeHtml(t("review_title"))}</p>
+          <p class="qrs-review-sub">${escapeHtml(t("review_sub"))}</p>
         </div>
         <div class="qrs-review-actions">
-          <button type="button" class="qrs-btn qrs-btn--ghost" id="qrs-review-later">Not now</button>
-          <a class="qrs-btn qrs-btn--primary" id="qrs-review-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">Share feedback</a>
+          <button type="button" class="qrs-btn qrs-btn--ghost" id="qrs-review-later">${escapeHtml(t("review_later"))}</button>
+          <a class="qrs-btn qrs-btn--primary" id="qrs-review-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("review_share"))}</a>
         </div>
       </div>
     `;
@@ -949,7 +944,7 @@ function initSnip({ empty }) {
   }
 
   function markCopied(btn) {
-    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ${escapeHtml(t("copied"))}`;
     btn.classList.add("qrs-btn--copied");
   }
 
@@ -1036,16 +1031,16 @@ function initSnip({ empty }) {
             </svg>
           </span>
           <div class="qrs-modal-titles">
-            <span class="qrs-modal-label">${results.length} Codes Found</span>
-            <span class="qrs-modal-sub">Scanned just now</span>
+            <span class="qrs-modal-label">${escapeHtml(t("codes_found", { n: results.length }))}</span>
+            <span class="qrs-modal-sub">${escapeHtml(t("scanned_just_now"))}</span>
           </div>
           <div class="qrs-modal-header-actions">
-            <button type="button" class="qrs-modal-tool" id="qrs-modal-history" title="Scan history" aria-label="Scan history">
+            <button type="button" class="qrs-modal-tool" id="qrs-modal-history" title="${escapeHtml(t("scan_history"))}" aria-label="${escapeHtml(t("scan_history"))}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/>
               </svg>
             </button>
-            <button class="qrs-modal-close" aria-label="Close" id="qrs-close-btn">
+            <button class="qrs-modal-close" aria-label="${escapeHtml(t("close"))}" id="qrs-close-btn">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
               </svg>
@@ -1058,7 +1053,7 @@ function initSnip({ empty }) {
         <div class="qrs-modal-actions qrs-modal-actions--stack">
           <button class="qrs-btn qrs-btn--primary" id="qrs-again-btn" type="button">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
-            Scan again
+            ${escapeHtml(t("scan_again"))}
           </button>
         </div>
       </div>
@@ -1122,17 +1117,17 @@ function initSnip({ empty }) {
     panel.id = "qrs-history-panel";
     panel.innerHTML = `
       <div class="qrs-history-header">
-        <span class="qrs-history-title">Scan History</span>
+        <span class="qrs-history-title">${escapeHtml(t("scan_history"))}</span>
         <div class="qrs-history-actions">
           ${
             list.length
               ? `<button type="button" class="qrs-tool-btn qrs-tool-btn--danger" id="qrs-history-clear">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
-                  Clear
+                  ${escapeHtml(t("clear"))}
                 </button>`
               : ""
           }
-          <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-history-close" aria-label="Close history">
+          <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-history-close" aria-label="${escapeHtml(t("close_history"))}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
@@ -1163,7 +1158,7 @@ function initSnip({ empty }) {
           </button>`;
                 })
                 .join("")
-            : `<p class="qrs-history-empty">No scans yet. Snip a code to get started.</p>`
+            : `<p class="qrs-history-empty">${escapeHtml(t("history_empty"))}</p>`
         }
       </div>
     `;
@@ -1177,7 +1172,7 @@ function initSnip({ empty }) {
     document.getElementById("qrs-history-clear")?.addEventListener("click", async () => {
       await clearHistory();
       closeHistoryPanel();
-      showToast("History cleared.", "info");
+      showToast(t("history_cleared"), "info");
     });
 
     const byId = Object.fromEntries(list.map((e) => [e.id, e]));
@@ -1209,7 +1204,7 @@ function initSnip({ empty }) {
       const cmds = await chrome.commands.getAll();
       const cmd = cmds.find((c) => c.name === "_execute_action");
       if (cmd?.shortcut) return cmd.shortcut;
-      return "Not set";
+      return t("not_set");
     } catch (_) {
       return "Alt+Q";
     }
@@ -1229,13 +1224,14 @@ function initSnip({ empty }) {
     const shortcutLabel = await getShortcutLabel();
     autoScanEnabled = settings.autoScanEnabled;
     manualSnipEnabled = settings.manualSnipEnabled;
+    const lang = settings.language || "auto";
 
     const panel = document.createElement("div");
     panel.id = "qrs-settings-panel";
     panel.innerHTML = `
       <div class="qrs-settings-header">
-        <span class="qrs-settings-title">Settings</span>
-        <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-settings-close" aria-label="Close settings">
+        <span class="qrs-settings-title">${escapeHtml(t("settings_title"))}</span>
+        <button type="button" class="qrs-tool-btn qrs-tool-btn--icon" id="qrs-settings-close" aria-label="${escapeHtml(t("close_settings"))}">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -1246,8 +1242,8 @@ function initSnip({ empty }) {
           settings.autoScanEnabled ? "checked" : ""
         } />
         <span class="qrs-settings-label">
-          <span class="qrs-settings-label-title">Auto-scan screen</span>
-          <span class="qrs-settings-label-hint">Automatically find all codes on the screen when you open the scanner</span>
+          <span class="qrs-settings-label-title">${escapeHtml(t("setting_autoscan"))}</span>
+          <span class="qrs-settings-label-hint">${escapeHtml(t("setting_autoscan_hint"))}</span>
         </span>
       </label>
       <label class="qrs-settings-row" for="qrs-setting-manual-snip">
@@ -1255,17 +1251,32 @@ function initSnip({ empty }) {
           settings.manualSnipEnabled ? "checked" : ""
         } />
         <span class="qrs-settings-label">
-          <span class="qrs-settings-label-title">Allow manual crop after auto-scan</span>
-          <span class="qrs-settings-label-hint">Drag to select a code after auto-scan finds results on screen</span>
+          <span class="qrs-settings-label-title">${escapeHtml(t("setting_manual"))}</span>
+          <span class="qrs-settings-label-hint">${escapeHtml(t("setting_manual_hint"))}</span>
         </span>
       </label>
+      <div class="qrs-settings-row qrs-settings-row--select">
+        <span class="qrs-settings-label">
+          <span class="qrs-settings-label-title">${escapeHtml(t("setting_language"))}</span>
+          <span class="qrs-settings-label-hint">${escapeHtml(t("setting_language_hint"))}</span>
+        </span>
+        <select id="qrs-setting-language" class="qrs-settings-select" aria-label="${escapeHtml(t("setting_language"))}">
+          <option value="auto" ${lang === "auto" ? "selected" : ""}>${escapeHtml(t("lang_auto"))}</option>
+          <option value="en" ${lang === "en" ? "selected" : ""}>${escapeHtml(t("lang_en"))}</option>
+          <option value="ja" ${lang === "ja" ? "selected" : ""}>${escapeHtml(t("lang_ja"))}</option>
+          <option value="zh" ${lang === "zh" ? "selected" : ""}>${escapeHtml(t("lang_zh"))}</option>
+          <option value="ru" ${lang === "ru" ? "selected" : ""}>${escapeHtml(t("lang_ru"))}</option>
+          <option value="de" ${lang === "de" ? "selected" : ""}>${escapeHtml(t("lang_de"))}</option>
+          <option value="uz" ${lang === "uz" ? "selected" : ""}>${escapeHtml(t("lang_uz"))}</option>
+        </select>
+      </div>
       <div class="qrs-settings-shortcut">
         <div class="qrs-settings-shortcut-row">
-          <span class="qrs-settings-label-title">Keyboard shortcut</span>
+          <span class="qrs-settings-label-title">${escapeHtml(t("shortcut"))}</span>
           <kbd class="qrs-kbd">${escapeHtml(shortcutLabel)}</kbd>
         </div>
-        <p class="qrs-settings-label-hint">If the shortcut does not work, set it once at chrome://extensions/shortcuts</p>
-        <button type="button" class="qrs-btn qrs-btn--ghost qrs-settings-shortcut-btn" id="qrs-open-shortcuts">Set shortcut</button>
+        <p class="qrs-settings-label-hint">${escapeHtml(t("shortcut_hint"))}</p>
+        <button type="button" class="qrs-btn qrs-btn--ghost qrs-settings-shortcut-btn" id="qrs-open-shortcuts">${escapeHtml(t("set_shortcut"))}</button>
       </div>
     `;
 
@@ -1284,7 +1295,7 @@ function initSnip({ empty }) {
         clearAutoscanChips();
         overlay?.classList.remove("qrs-overlay--autoscan");
         syncOverlaySnipState();
-        setDockHintText("Drag around a code to scan");
+        setDockHintText(t("hint_drag"));
       }
     });
     document.getElementById("qrs-setting-manual-snip")?.addEventListener("change", async (e) => {
@@ -1295,6 +1306,20 @@ function initSnip({ empty }) {
         const count = overlay?.querySelectorAll(".qrs-autoscan-chip").length || 0;
         setDockHintText(autoscanDockHint(count));
       }
+    });
+    document.getElementById("qrs-setting-language")?.addEventListener("change", async (e) => {
+      await setLanguage(e.target.value);
+      // Reload clears in-memory screenshot; re-stash so the page can restore it.
+      const bg = document.getElementById("screenshot-bg");
+      const src = bg?.src || "";
+      if (src && bg.style.display !== "none" && !document.body.classList.contains("qrs-empty")) {
+        try {
+          await chrome.storage.local.set({ capturedImage: src });
+        } catch (_) {
+          /* quota — language still applies after reload */
+        }
+      }
+      location.reload();
     });
     document.getElementById("qrs-open-shortcuts")?.addEventListener("click", () => {
       chrome.tabs.create({ url: "chrome://extensions/shortcuts" });

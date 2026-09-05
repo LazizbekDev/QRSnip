@@ -70,7 +70,7 @@ function parsePayload(raw, format = "unknown") {
   };
 
   if (!text) {
-    return { ...base, type: "empty", typeLabel: "Empty" };
+    return { ...base, type: "empty", typeLabel: t("type_empty") };
   }
 
   // WIFI:T:WPA;S:NetworkName;P:password;;
@@ -79,15 +79,15 @@ function parsePayload(raw, format = "unknown") {
     return {
       ...base,
       type: "wifi",
-      typeLabel: "Wi‑Fi",
+      typeLabel: t("type_wifi"),
       display: meta.ssid
-        ? `${meta.ssid}${meta.password ? "\nPassword: " + meta.password : ""}`
+        ? `${meta.ssid}${meta.password ? "\n" + t("password_label") + ": " + meta.password : ""}`
         : text,
       copyValue: meta.password || text,
       meta,
       primary: meta.password
-        ? { id: "copy_password", label: "Copy Password", value: meta.password }
-        : { id: "copy", label: "Copy", value: text },
+        ? { id: "copy_password", label: t("copy_password"), value: meta.password }
+        : { id: "copy", label: t("copy"), value: text },
     };
   }
 
@@ -98,11 +98,11 @@ function parsePayload(raw, format = "unknown") {
     return {
       ...base,
       type: "vcard",
-      typeLabel: "Contact",
+      typeLabel: t("type_contact"),
       display: lines.length ? lines.join("\n") : text,
       copyValue: text,
       meta,
-      primary: { id: "copy", label: "Copy Contact", value: text },
+      primary: { id: "copy", label: t("copy_contact"), value: text },
     };
   }
 
@@ -112,10 +112,10 @@ function parsePayload(raw, format = "unknown") {
     return {
       ...base,
       type: "email",
-      typeLabel: "Email",
+      typeLabel: t("type_email"),
       display: email || text,
       meta: { email },
-      primary: { id: "mailto", label: "Send Email", value: text },
+      primary: { id: "mailto", label: t("send_email"), value: text },
     };
   }
 
@@ -125,10 +125,10 @@ function parsePayload(raw, format = "unknown") {
     return {
       ...base,
       type: "tel",
-      typeLabel: "Phone",
+      typeLabel: t("type_phone"),
       display: phone || text,
       meta: { phone },
-      primary: { id: "tel", label: "Call", value: text },
+      primary: { id: "tel", label: t("call"), value: text },
     };
   }
 
@@ -138,10 +138,10 @@ function parsePayload(raw, format = "unknown") {
     return {
       ...base,
       type: "sms",
-      typeLabel: "SMS",
+      typeLabel: t("type_sms"),
       display: phone || text,
       meta: { phone },
-      primary: { id: "sms", label: "Send SMS", value: text.startsWith("sms") ? text : `sms:${phone}` },
+      primary: { id: "sms", label: t("send_sms"), value: text.startsWith("sms") ? text : `sms:${phone}` },
     };
   }
 
@@ -152,10 +152,10 @@ function parsePayload(raw, format = "unknown") {
     return {
       ...base,
       type: "geo",
-      typeLabel: "Location",
+      typeLabel: t("type_location"),
       display: coords || text,
       meta: { coords, mapsUrl },
-      primary: { id: "maps", label: "Open Maps", value: mapsUrl },
+      primary: { id: "maps", label: t("open_maps"), value: mapsUrl },
     };
   }
 
@@ -165,10 +165,10 @@ function parsePayload(raw, format = "unknown") {
     return {
       ...base,
       type: "url",
-      typeLabel: "Link",
+      typeLabel: t("type_link"),
       display: text,
       meta: { href },
-      primary: { id: "open", label: "Open Link", value: href },
+      primary: { id: "open", label: t("open_link"), value: href },
     };
   }
 
@@ -177,18 +177,18 @@ function parsePayload(raw, format = "unknown") {
     return {
       ...base,
       type: "email",
-      typeLabel: "Email",
+      typeLabel: t("type_email"),
       display: text,
       meta: { email: text },
-      primary: { id: "mailto", label: "Send Email", value: `mailto:${text}` },
+      primary: { id: "mailto", label: t("send_email"), value: `mailto:${text}` },
     };
   }
 
   return {
     ...base,
     type: "text",
-    typeLabel: "Text",
-    primary: { id: "copy", label: "Copy", value: text },
+    typeLabel: t("type_text"),
+    primary: { id: "copy", label: t("copy"), value: text },
   };
 }
 

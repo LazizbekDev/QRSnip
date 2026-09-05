@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip：二维码与条码扫描器"
+  },
+  "extDescription": {
+    "message": "从屏幕截取或图片扫描二维码与条码。多格式、智能操作、本地历史。100%离线。"
+  },
+  "actionTitle": {
+    "message": "QRSnip — Alt+Q 扫描"
+  },
+  "contextMenuScan": {
+    "message": "用 QRSnip 扫描"
+  },
+  "commandDescription": {
+    "message": "截取屏幕并扫描二维码"
+  }
+}

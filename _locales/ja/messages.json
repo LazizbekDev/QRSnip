@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: QR・バーコードスキャナー"
+  },
+  "extDescription": {
+    "message": "画面の切り取りや画像からQR・バーコードをスキャン。多形式対応、スマート操作、履歴。完全オフライン。"
+  },
+  "actionTitle": {
+    "message": "QRSnip — Alt+Qでスキャン"
+  },
+  "contextMenuScan": {
+    "message": "QRSnipでスキャン"
+  },
+  "commandDescription": {
+    "message": "画面をキャプチャしてQRコードをスキャン"
+  }
+}

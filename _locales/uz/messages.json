@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: QR kod va shtrixkod skaneri"
+  },
+  "extDescription": {
+    "message": "Har qanday ekran snip yoki rasmdan QR kod va shtrixkodlarni skanerlang. Ko‘p format, aqlli amallar, qurilmadagi tarix. 100% oflayn."
+  },
+  "actionTitle": {
+    "message": "QRSnip — skanerlash uchun Alt+Q"
+  },
+  "contextMenuScan": {
+    "message": "QRSnip bilan skanerlash"
+  },
+  "commandDescription": {
+    "message": "Ekranni olish va QR kodlarni skanerlash"
+  }
+}

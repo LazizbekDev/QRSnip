@@ -1428,6 +1428,30 @@
   cursor: pointer;
 }
 
+.qrs-settings-row--select {
+  flex-direction: column;
+  gap: 10px;
+  cursor: default;
+  border-top: 1px solid var(--qrs-border);
+}
+
+.qrs-settings-select {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(45, 212, 191, 0.22);
+  background: rgba(8, 12, 16, 0.55);
+  color: var(--qrs-text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.qrs-settings-select:focus {
+  border-color: rgba(45, 212, 191, 0.45);
+}
+
 .qrs-settings-checkbox {
   flex-shrink: 0;
   width: 16px;

@@ -14,7 +14,7 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: "qrsnip-scan-image",
-      title: "Scan with QRSnip",
+      title: chrome.i18n.getMessage("contextMenuScan") || "Scan with QRSnip",
       contexts: ["image"],
     });
   });
