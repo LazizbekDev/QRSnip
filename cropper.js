@@ -40,7 +40,6 @@ function initSnip({ empty }) {
   let modalOpen = false;
   let historyOpen = false;
   let settingsOpen = false;
-  let keepOpenAfterCopy = false;
   let autoScanEnabled = true;
   let manualSnipEnabled = true;
   let autoScanRunning = false;
@@ -50,7 +49,6 @@ function initSnip({ empty }) {
   let keyHandler = null;
 
   void getSettings().then((s) => {
-    keepOpenAfterCopy = s.keepOpenAfterCopy;
     autoScanEnabled = s.autoScanEnabled;
     manualSnipEnabled = s.manualSnipEnabled;
     syncOverlaySnipState();
@@ -366,8 +364,7 @@ function initSnip({ empty }) {
       <div class="qrs-autoscan-dim" aria-hidden="true"></div>
       <div class="qrs-autoscan-noise" aria-hidden="true"></div>
       <div class="qrs-autoscan-border" aria-hidden="true"></div>
-      <div class="qrs-autoscan-beam" aria-hidden="true"></div>
-      <div class="qrs-autoscan-beam-trail" aria-hidden="true"></div>
+      <div class="qrs-autoscan-pulse" aria-hidden="true"></div>
     `;
     overlay.insertBefore(fx, overlay.firstChild);
     return fx;
@@ -452,17 +449,16 @@ function initSnip({ empty }) {
     overlay.classList.add("qrs-overlay--autoscan");
     syncOverlaySnipState();
     startAutoscanFx();
+    setDockHintText("Detecting…");
 
-    setDockHintText("Scanning screen…");
-
-    const scanDuration = 1600;
+    const fxStarted = performance.now();
+    const MIN_FX_MS = 450;
 
     try {
       await initDecoder();
-      const [detections] = await Promise.all([
-        detectCodesWithBounds(img),
-        sleep(scanDuration),
-      ]);
+      const detections = await detectCodesWithBounds(img);
+      const elapsed = performance.now() - fxStarted;
+      if (elapsed < MIN_FX_MS) await sleep(MIN_FX_MS - elapsed);
 
       finishAutoscanFx();
 
@@ -899,7 +895,7 @@ function initSnip({ empty }) {
 
   function wireResultModal(modal, parsed, primaryIsCopy) {
     document.getElementById("qrs-close-btn")?.addEventListener("click", () =>
-      dismissModal(modal, true)
+      dismissModal(modal, false)
     );
     document.getElementById("qrs-again-btn")?.addEventListener("click", scanAgain);
     document.getElementById("qrs-modal-history")?.addEventListener("click", (e) => {
@@ -910,9 +906,6 @@ function initSnip({ empty }) {
     const doCopy = async (btn) => {
       await navigator.clipboard.writeText(parsed.copyValue);
       if (btn) markCopied(btn);
-      if (!keepOpenAfterCopy) {
-        setTimeout(() => dismissModal(modal, true), 900);
-      }
     };
 
     const copyBtn = document.getElementById("qrs-copy-btn");
@@ -934,17 +927,14 @@ function initSnip({ empty }) {
         const result = await runPrimaryAction(parsed.primary);
         if (result === "copied") {
           markCopied(primaryBtn);
-          if (!keepOpenAfterCopy) {
-            setTimeout(() => dismissModal(modal, true), 900);
-          }
         } else if (result === "opened") {
-          dismissModal(modal, true);
+          dismissModal(modal, false);
         }
       });
     }
 
     modal.addEventListener("click", (e) => {
-      if (e.target === modal) dismissModal(modal, true);
+      if (e.target === modal) dismissModal(modal, false);
     });
   }
 
@@ -1080,7 +1070,7 @@ function initSnip({ empty }) {
     });
 
     document.getElementById("qrs-close-btn")?.addEventListener("click", () =>
-      dismissModal(modal, true)
+      dismissModal(modal, false)
     );
     document.getElementById("qrs-again-btn")?.addEventListener("click", scanAgain);
     document.getElementById("qrs-modal-history")?.addEventListener("click", (e) => {
@@ -1099,7 +1089,7 @@ function initSnip({ empty }) {
     });
 
     modal.addEventListener("click", (e) => {
-      if (e.target === modal) dismissModal(modal, true);
+      if (e.target === modal) dismissModal(modal, false);
     });
   }
 
@@ -1237,7 +1227,6 @@ function initSnip({ empty }) {
 
     const settings = await getSettings();
     const shortcutLabel = await getShortcutLabel();
-    keepOpenAfterCopy = settings.keepOpenAfterCopy;
     autoScanEnabled = settings.autoScanEnabled;
     manualSnipEnabled = settings.manualSnipEnabled;
 
@@ -1268,15 +1257,6 @@ function initSnip({ empty }) {
         <span class="qrs-settings-label">
           <span class="qrs-settings-label-title">Allow manual crop after auto-scan</span>
           <span class="qrs-settings-label-hint">Drag to select a code after auto-scan finds results on screen</span>
-        </span>
-      </label>
-      <label class="qrs-settings-row" for="qrs-setting-keep-open">
-        <input type="checkbox" id="qrs-setting-keep-open" class="qrs-settings-checkbox" ${
-          settings.keepOpenAfterCopy ? "checked" : ""
-        } />
-        <span class="qrs-settings-label">
-          <span class="qrs-settings-label-title">Keep scanner open after copying</span>
-          <span class="qrs-settings-label-hint">Copy a link, then open it from the result without rescanning</span>
         </span>
       </label>
       <div class="qrs-settings-shortcut">
@@ -1315,10 +1295,6 @@ function initSnip({ empty }) {
         const count = overlay?.querySelectorAll(".qrs-autoscan-chip").length || 0;
         setDockHintText(autoscanDockHint(count));
       }
-    });
-    document.getElementById("qrs-setting-keep-open")?.addEventListener("change", async (e) => {
-      const next = await setKeepOpenAfterCopy(e.target.checked);
-      keepOpenAfterCopy = next.keepOpenAfterCopy;
     });
     document.getElementById("qrs-open-shortcuts")?.addEventListener("click", () => {
       chrome.tabs.create({ url: "chrome://extensions/shortcuts" });

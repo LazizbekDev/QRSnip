@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QRSnip: QR Code & Barcode Scanner",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "description": "Scan QR codes & barcodes from any screen snip or image. Multi-format, smart actions, local history. 100% offline.",
   "offline_enabled": true,
   "action": {

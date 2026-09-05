@@ -37,7 +37,7 @@ import json, os, zipfile
 
 m = json.load(open("dist/staging/manifest.json"))
 assert m["manifest_version"] == 3
-assert m["version"] == "2.5.3", m["version"]
+assert m["version"] == "2.5.4", m["version"]
 assert "tabs" in m.get("permissions", []), "tabs permission required for scanner tab return"
 assert "<all_urls>" not in m.get("host_permissions", []), "<all_urls> should stay removed"
 assert "file:///*" in m.get("host_permissions", []), "file:///* required for local PDFs"
