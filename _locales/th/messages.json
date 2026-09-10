@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: สแกนเนอร์ QR และบาร์โค้ด"
+  },
+  "extDescription": {
+    "message": "สแกน QR และบาร์โค้ดจากภาพหน้าจอหรือรูปภาพ การทำงานอัจฉริยะ ประวัติในเครื่อง ออฟไลน์ 100%"
+  },
+  "actionTitle": {
+    "message": "QRSnip — กด Alt+Q เพื่อสแกน"
+  },
+  "contextMenuScan": {
+    "message": "สแกนด้วย QRSnip"
+  },
+  "commandDescription": {
+    "message": "จับภาพหน้าจอและสแกน QR โค้ด"
+  }
+}

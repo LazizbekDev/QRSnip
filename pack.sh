@@ -33,7 +33,7 @@ cp "$ROOT"/fonts/*.woff2 "$TMP/fonts/"
 cp "$ROOT/vendor/zxing-decoder.js" "$ROOT/vendor/zxing_reader.wasm" "$TMP/vendor/"
 
 # Chrome Web Store / browser UI locales
-for loc in en ja zh_CN ru de uz; do
+for loc in en ja zh_CN ru de uz hi id th fr es ar fa; do
   mkdir -p "$TMP/_locales/$loc"
   cp "$ROOT/_locales/$loc/messages.json" "$TMP/_locales/$loc/"
 done
@@ -44,7 +44,7 @@ import json, os, zipfile
 
 m = json.load(open("dist/staging/manifest.json"))
 assert m["manifest_version"] == 3
-assert m["version"] == "2.6.1", m["version"]
+assert m["version"] == "2.6.2", m["version"]
 assert m.get("default_locale") == "en"
 assert "tabs" in m.get("permissions", []), "tabs permission required for scanner tab return"
 assert "<all_urls>" not in m.get("host_permissions", []), "<all_urls> should stay removed"
@@ -90,6 +90,13 @@ ALLOWED = {
     "_locales/ru/messages.json",
     "_locales/de/messages.json",
     "_locales/uz/messages.json",
+    "_locales/hi/messages.json",
+    "_locales/id/messages.json",
+    "_locales/th/messages.json",
+    "_locales/fr/messages.json",
+    "_locales/es/messages.json",
+    "_locales/ar/messages.json",
+    "_locales/fa/messages.json",
 }
 FORBIDDEN_SUBSTR = (
     "store-assets",
@@ -125,7 +132,7 @@ for f in staging_files:
         assert bad not in low, f"forbidden path in staging: {f}"
 
 # Locale description length check (Store-friendly)
-for loc in ("en", "ja", "zh_CN", "ru", "de", "uz"):
+for loc in ("en", "ja", "zh_CN", "ru", "de", "uz", "hi", "id", "th", "fr", "es", "ar", "fa"):
     msg = json.load(open(f"dist/staging/_locales/{loc}/messages.json"))
     dlen = len(msg["extDescription"]["message"])
     nlen = len(msg["extName"]["message"])

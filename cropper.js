@@ -1268,6 +1268,13 @@ function initSnip({ empty }) {
           <option value="ru" ${lang === "ru" ? "selected" : ""}>${escapeHtml(t("lang_ru"))}</option>
           <option value="de" ${lang === "de" ? "selected" : ""}>${escapeHtml(t("lang_de"))}</option>
           <option value="uz" ${lang === "uz" ? "selected" : ""}>${escapeHtml(t("lang_uz"))}</option>
+          <option value="hi" ${lang === "hi" ? "selected" : ""}>${escapeHtml(t("lang_hi"))}</option>
+          <option value="id" ${lang === "id" ? "selected" : ""}>${escapeHtml(t("lang_id"))}</option>
+          <option value="th" ${lang === "th" ? "selected" : ""}>${escapeHtml(t("lang_th"))}</option>
+          <option value="fr" ${lang === "fr" ? "selected" : ""}>${escapeHtml(t("lang_fr"))}</option>
+          <option value="es" ${lang === "es" ? "selected" : ""}>${escapeHtml(t("lang_es"))}</option>
+          <option value="ar" ${lang === "ar" ? "selected" : ""}>${escapeHtml(t("lang_ar"))}</option>
+          <option value="fa" ${lang === "fa" ? "selected" : ""}>${escapeHtml(t("lang_fa"))}</option>
         </select>
       </div>
       <div class="qrs-settings-shortcut">

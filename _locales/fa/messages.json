@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: اسکنر QR و بارکد"
+  },
+  "extDescription": {
+    "message": "اسکن QR و بارکد از برش صفحه یا تصویر. اقدامات هوشمند، تاریخچه محلی. ۱۰۰٪ آفلاین."
+  },
+  "actionTitle": {
+    "message": "QRSnip — اسکن با Alt+Q"
+  },
+  "contextMenuScan": {
+    "message": "اسکن با QRSnip"
+  },
+  "commandDescription": {
+    "message": "گرفتن نماگرفت و اسکن کدهای QR"
+  }
+}

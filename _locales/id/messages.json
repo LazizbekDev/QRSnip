@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: Pemindai Kode QR & Barcode"
+  },
+  "extDescription": {
+    "message": "Pindai QR & barcode dari snip layar atau gambar. Aksi cerdas, riwayat lokal. 100% offline."
+  },
+  "actionTitle": {
+    "message": "QRSnip — Alt+Q untuk memindai"
+  },
+  "contextMenuScan": {
+    "message": "Pindai dengan QRSnip"
+  },
+  "commandDescription": {
+    "message": "Tangkap layar dan pindai kode QR"
+  }
+}

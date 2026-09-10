@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: ماسح رموز QR والباركود"
+  },
+  "extDescription": {
+    "message": "امسح رموز QR والباركود من لقطة شاشة أو صورة. إجراءات ذكية وسجل محلي. دون اتصال 100%."
+  },
+  "actionTitle": {
+    "message": "QRSnip — Alt+Q للمسح"
+  },
+  "contextMenuScan": {
+    "message": "مسح باستخدام QRSnip"
+  },
+  "commandDescription": {
+    "message": "التقاط الشاشة ومسح رموز QR"
+  }
+}

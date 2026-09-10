@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: QR कोड और बारकोड स्कैनर"
+  },
+  "extDescription": {
+    "message": "किसी भी स्क्रीन स्निप या छवि से QR और बारकोड स्कैन करें। स्मार्ट क्रियाएँ, स्थानीय इतिहास। 100% ऑफ़लाइन।"
+  },
+  "actionTitle": {
+    "message": "QRSnip — स्कैन के लिए Alt+Q"
+  },
+  "contextMenuScan": {
+    "message": "QRSnip से स्कैन करें"
+  },
+  "commandDescription": {
+    "message": "स्क्रीन कैप्चर करें और QR कोड स्कैन करें"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: Escáner de QR y códigos de barras"
+  },
+  "extDescription": {
+    "message": "Escanea QR y códigos de barras desde un snip o imagen. Acciones inteligentes, historial local. 100% sin conexión."
+  },
+  "actionTitle": {
+    "message": "QRSnip — Alt+Q para escanear"
+  },
+  "contextMenuScan": {
+    "message": "Escanear con QRSnip"
+  },
+  "commandDescription": {
+    "message": "Capturar pantalla y escanear códigos QR"
+  }
+}
