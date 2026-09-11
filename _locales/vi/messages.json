@@ -1,0 +1,17 @@
+{
+  "extName": {
+    "message": "QRSnip: Trình quét mã QR & mã vạch"
+  },
+  "extDescription": {
+    "message": "Quét QR và mã vạch từ ảnh chụp màn hình hoặc hình ảnh. Thao tác thông minh, lịch sử cục bộ. 100% ngoại tuyến."
+  },
+  "actionTitle": {
+    "message": "QRSnip — Alt+Q để quét"
+  },
+  "contextMenuScan": {
+    "message": "Quét bằng QRSnip"
+  },
+  "commandDescription": {
+    "message": "Chụp màn hình và quét mã QR"
+  }
+}

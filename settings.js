@@ -23,6 +23,7 @@ const ALLOWED_LANGUAGES = [
   "es",
   "ar",
   "fa",
+  "vi",
 ];
 
 /**
@@ -61,7 +62,7 @@ async function setManualSnipEnabled(value) {
 }
 
 /**
- * @param {string} value - auto | en | ja | zh | ru | de | uz | hi | id | th | fr | es | ar | fa
+ * @param {string} value - auto | en | ja | zh | ru | de | uz | hi | id | th | fr | es | ar | fa | vi
  */
 async function setLanguage(value) {
   const language = ALLOWED_LANGUAGES.includes(value) ? value : "auto";

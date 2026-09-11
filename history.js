@@ -7,6 +7,7 @@ const REVIEW_PROMPT_DONE_KEY = "reviewPromptDone";
 const REVIEW_PROMPT_THRESHOLD = 5;
 const REVIEW_URL =
   "https://chromewebstore.google.com/detail/pjecadbnlcipeofmeammkpchfgeagmmg/reviews";
+const SUPPORT_URL = "https://www.buymeacoffee.com/lazizcore";
 
 /**
  * @typedef {{ id: string, timestamp: number, format: string, type: string, raw: string, preview: string }} HistoryEntry

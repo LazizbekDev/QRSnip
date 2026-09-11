@@ -8,6 +8,7 @@ const SCAN_SESSION_KEYS = [
   "returnUrl",
   "capturedImage",
   "scanSource",
+  "openHint",
 ];
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -86,19 +87,89 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-async function captureAndOpenCropper(tab) {
+/**
+ * Pages Chrome cannot capture (chrome://, Web Store, extension pages, etc.).
+ * @param {string|undefined} url
+ * @returns {boolean}
+ */
+function isRestrictedCaptureUrl(url) {
+  if (!url || typeof url !== "string") return false;
   try {
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, {
-      format: "png",
+    const u = new URL(url);
+    const proto = u.protocol;
+    if (
+      proto === "chrome:" ||
+      proto === "chrome-extension:" ||
+      proto === "edge:" ||
+      proto === "about:" ||
+      proto === "devtools:" ||
+      proto === "view-source:"
+    ) {
+      return true;
+    }
+    const host = u.hostname;
+    if (host === "chromewebstore.google.com") return true;
+    if (host === "chrome.google.com" && u.pathname.includes("/webstore")) return true;
+  } catch (_) {
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Prefer JPEG to reduce chrome.storage.local quota pressure on large / HiDPI screens.
+ * @param {number} windowId
+ * @param {number} [quality]
+ * @returns {Promise<string>}
+ */
+async function captureVisibleTabDataUrl(windowId, quality = 92) {
+  try {
+    return await chrome.tabs.captureVisibleTab(windowId, {
+      format: "jpeg",
+      quality,
     });
-    await openCropperTab(tab, {
-      capturedImage: dataUrl,
-      scanSource: "capture",
-    });
+  } catch (_) {
+    return await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
+  }
+}
+
+async function captureAndOpenCropper(tab) {
+  const isFileTab = typeof tab?.url === "string" && tab.url.startsWith("file://");
+
+  if (isRestrictedCaptureUrl(tab?.url)) {
+    await openCropperTab(tab, { scanSource: "empty", openHint: "restricted" }, { omitCapture: true });
+    return;
+  }
+
+  try {
+    let dataUrl = await captureVisibleTabDataUrl(tab.windowId, 92);
+    try {
+      await persistCropperSession(tab, {
+        capturedImage: dataUrl,
+        scanSource: "capture",
+      });
+    } catch (storeErr) {
+      console.warn("[QRSnip] Storage set failed, retrying smaller capture:", storeErr);
+      dataUrl = await captureVisibleTabDataUrl(tab.windowId, 72);
+      try {
+        await persistCropperSession(tab, {
+          capturedImage: dataUrl,
+          scanSource: "capture",
+        });
+      } catch (storeErr2) {
+        console.error("[QRSnip] Storage quota exhausted:", storeErr2);
+        await openCropperTab(
+          tab,
+          { scanSource: "empty", openHint: "quota" },
+          { omitCapture: true }
+        );
+        return;
+      }
+    }
+    await createCropperTab(tab);
   } catch (err) {
     console.error("[QRSnip] Capture failed:", err);
 
-    const isFileTab = typeof tab?.url === "string" && tab.url.startsWith("file://");
     if (isFileTab) {
       await chrome.tabs.create({
         url: `chrome://extensions/?id=${chrome.runtime.id}`,
@@ -106,7 +177,11 @@ async function captureAndOpenCropper(tab) {
       return;
     }
 
-    await openEmptyCropper(tab);
+    await openCropperTab(
+      tab,
+      { scanSource: "empty", openHint: "capture_failed" },
+      { omitCapture: true }
+    );
   }
 }
 
@@ -114,12 +189,21 @@ async function openEmptyCropper(tab) {
   await openCropperTab(tab, { scanSource: "empty" }, { omitCapture: true });
 }
 
-async function openCropperTab(tab, sessionExtra = {}, { omitCapture = false } = {}) {
+/**
+ * Build session payload and write storage (image first) — does not open the tab.
+ */
+async function persistCropperSession(tab, sessionExtra = {}, { omitCapture = false } = {}) {
   const payload = {
     scanSource: sessionExtra.scanSource || "empty",
     sourceTabId: tab?.id ?? null,
     returnUrl: typeof tab?.url === "string" ? tab.url : "",
   };
+
+  if (sessionExtra.openHint) {
+    payload.openHint = sessionExtra.openHint;
+  } else {
+    await chrome.storage.local.remove(["openHint"]);
+  }
 
   if (!omitCapture && sessionExtra.capturedImage) {
     payload.capturedImage = sessionExtra.capturedImage;
@@ -127,6 +211,11 @@ async function openCropperTab(tab, sessionExtra = {}, { omitCapture = false } = 
     await chrome.storage.local.remove(["capturedImage"]);
   }
 
+  await chrome.storage.local.set(payload);
+  return payload;
+}
+
+async function createCropperTab(tab) {
   let cropper;
   if (!tab?.id) {
     cropper = await chrome.tabs.create({ url: CROPPER_URL(), active: true });
@@ -137,7 +226,14 @@ async function openCropperTab(tab, sessionExtra = {}, { omitCapture = false } = 
       active: true,
     });
   }
+  await chrome.storage.local.set({ cropperTabId: cropper.id });
+  return cropper;
+}
 
-  payload.cropperTabId = cropper.id;
-  await chrome.storage.local.set(payload);
+/**
+ * Persist session *before* opening the cropper tab so the page never races an empty read.
+ */
+async function openCropperTab(tab, sessionExtra = {}, { omitCapture = false } = {}) {
+  await persistCropperSession(tab, sessionExtra, { omitCapture });
+  await createCropperTab(tab);
 }

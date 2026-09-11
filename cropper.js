@@ -4,23 +4,28 @@ document.addEventListener("DOMContentLoaded", async () => {
   const settings = await getSettings();
   initI18n(settings.language);
 
-  const data = await chrome.storage.local.get(["capturedImage", "scanSource"]);
+  const data = await waitForCapturedImage();
   const bgImg = document.getElementById("screenshot-bg");
+  const openHint = data.openHint;
+
+  if (openHint) {
+    chrome.storage.local.remove(["openHint"]);
+  }
 
   if (!data.capturedImage) {
     // Empty state — allow drop/paste without a prior capture
     bgImg.style.display = "none";
     document.body.classList.add("qrs-empty");
-    void initSnip({ empty: true });
+    void initSnip({ empty: true, openHint: openHint || null });
     return;
   }
 
   bgImg.onload = () => {
-    void initSnip({ empty: false });
+    void initSnip({ empty: false, openHint: null });
   };
   bgImg.onerror = () => {
-    showBootstrapToast(t("toast_screenshot_fail"));
-    void initSnip({ empty: true });
+    showBootstrapToast(t("toast_screenshot_fail"), "error");
+    void initSnip({ empty: true, openHint: null });
   };
   bgImg.src = data.capturedImage;
 
@@ -28,12 +33,55 @@ document.addEventListener("DOMContentLoaded", async () => {
   chrome.storage.local.remove(["capturedImage", "scanSource"]);
 });
 
-function showBootstrapToast(message) {
-  // Minimal toast before initSnip exists
-  console.warn("[QRSnip]", message);
+/**
+ * Retry briefly if background wrote storage just after tab create (legacy race / slow I/O).
+ * @param {number} [attempts]
+ * @param {number} [delayMs]
+ */
+async function waitForCapturedImage(attempts = 4, delayMs = 120) {
+  let last = { capturedImage: null, scanSource: null, openHint: null };
+  for (let i = 0; i < attempts; i++) {
+    last = await chrome.storage.local.get(["capturedImage", "scanSource", "openHint"]);
+    if (last.capturedImage) return last;
+    if (last.openHint) return last;
+    // Intentional empty session already persisted (no race)
+    if (last.scanSource === "empty") return last;
+    if (i < attempts - 1) {
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return last;
 }
 
-function initSnip({ empty }) {
+/** Queued until dock toast exists inside initSnip */
+let pendingBootstrapToast = null;
+
+function showBootstrapToast(message, type = "error") {
+  pendingBootstrapToast = { message, type };
+  showEarlyToast(message, type);
+}
+
+function showEarlyToast(message, type = "error") {
+  try {
+    document.getElementById("qrs-toast")?.remove();
+    const toast = document.createElement("div");
+    toast.id = "qrs-toast";
+    toast.className = `qrs-toast qrs-toast--${type} qrs-toast--visible`;
+    toast.innerHTML = `<span>${String(message)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")}</span>`;
+    document.documentElement.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.remove("qrs-toast--visible");
+      setTimeout(() => toast.remove(), 400);
+    }, 4200);
+  } catch (_) {
+    console.warn("[QRSnip]", message);
+  }
+}
+
+function initSnip({ empty, openHint }) {
   let overlay = null;
   let isSelecting = false;
   let startX = 0;
@@ -50,6 +98,7 @@ function initSnip({ empty }) {
   let currentResults = [];
   let pendingReviewPrompt = false;
   let keyHandler = null;
+  let activePointerId = null;
 
   void getSettings().then((s) => {
     autoScanEnabled = s.autoScanEnabled;
@@ -64,6 +113,17 @@ function initSnip({ empty }) {
     console.error("[QRSnip] Decoder init failed:", err);
     showToast(t("toast_decoder_unavailable"), "error");
   });
+
+  if (openHint === "restricted") {
+    showToast(t("toast_restricted_page"), "info");
+  } else if (openHint === "capture_failed") {
+    showToast(t("toast_capture_failed"), "error");
+  } else if (openHint === "quota") {
+    showToast(t("toast_capture_quota"), "error");
+  } else if (pendingBootstrapToast) {
+    showToast(pendingBootstrapToast.message, pendingBootstrapToast.type);
+    pendingBootstrapToast = null;
+  }
 
   // ─── Overlay ─────────────────────────────────────────────────────────────
   function buildOverlay() {
@@ -129,9 +189,10 @@ function initSnip({ empty }) {
       requestAnimationFrame(() => overlay.classList.add("qrs-overlay--visible"));
     });
 
-    overlay.addEventListener("mousedown", onMouseDown);
-    overlay.addEventListener("mousemove", onMouseMove);
-    overlay.addEventListener("mouseup", onMouseUp);
+    overlay.addEventListener("pointerdown", onPointerDown);
+    overlay.addEventListener("pointermove", onPointerMove);
+    overlay.addEventListener("pointerup", onPointerUp);
+    overlay.addEventListener("pointercancel", onPointerUp);
     keyHandler = onKeyDown;
     document.addEventListener("keydown", keyHandler);
 
@@ -172,8 +233,8 @@ function initSnip({ empty }) {
     }
   }
 
-  // ─── Mouse ───────────────────────────────────────────────────────────────
-  function onMouseDown(e) {
+  // ─── Pointer (mouse + touch + pen) ───────────────────────────────────────
+  function onPointerDown(e) {
     if (modalOpen || historyOpen || settingsOpen) return;
     if (
       e.target.closest("#qrs-dock") ||
@@ -184,8 +245,14 @@ function initSnip({ empty }) {
       return;
     }
     if (!canManualSnip()) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
 
     e.preventDefault();
+    activePointerId = e.pointerId;
+    try {
+      overlay.setPointerCapture(e.pointerId);
+    } catch (_) {}
+
     isSelecting = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -195,7 +262,9 @@ function initSnip({ empty }) {
     document.getElementById("qrs-dock")?.classList.add("qrs-dock--hidden");
   }
 
-  function onMouseMove(e) {
+  function onPointerMove(e) {
+    if (activePointerId !== null && e.pointerId !== activePointerId) return;
+
     const gh = guideLines.querySelector(".qrs-guide-h");
     const gv = guideLines.querySelector(".qrs-guide-v");
     if (gh) gh.style.top = e.clientY + "px";
@@ -209,7 +278,15 @@ function initSnip({ empty }) {
     updateSelBox(x, y, w, h);
   }
 
-  function onMouseUp(e) {
+  function onPointerUp(e) {
+    if (activePointerId !== null && e.pointerId !== activePointerId) return;
+    if (activePointerId !== null) {
+      try {
+        overlay.releasePointerCapture(activePointerId);
+      } catch (_) {}
+      activePointerId = null;
+    }
+
     if (!isSelecting) return;
     isSelecting = false;
 
@@ -854,6 +931,7 @@ function initSnip({ empty }) {
         <div class="qrs-review-actions">
           <button type="button" class="qrs-btn qrs-btn--ghost" id="qrs-review-later">${escapeHtml(t("review_later"))}</button>
           <a class="qrs-btn qrs-btn--primary" id="qrs-review-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("review_share"))}</a>
+          <a class="qrs-bmc-btn" id="qrs-review-coffee" href="${SUPPORT_URL}" target="_blank" rel="noopener noreferrer">${bmcButtonInner(t("support_coffee"))}</a>
         </div>
       </div>
     `;
@@ -870,6 +948,9 @@ function initSnip({ empty }) {
       dismissReviewPrompt()
     );
     el.querySelector("#qrs-review-link")?.addEventListener("click", () => {
+      setTimeout(() => dismissReviewPrompt(), 120);
+    });
+    el.querySelector("#qrs-review-coffee")?.addEventListener("click", () => {
       setTimeout(() => dismissReviewPrompt(), 120);
     });
   }
@@ -1275,6 +1356,7 @@ function initSnip({ empty }) {
           <option value="es" ${lang === "es" ? "selected" : ""}>${escapeHtml(t("lang_es"))}</option>
           <option value="ar" ${lang === "ar" ? "selected" : ""}>${escapeHtml(t("lang_ar"))}</option>
           <option value="fa" ${lang === "fa" ? "selected" : ""}>${escapeHtml(t("lang_fa"))}</option>
+          <option value="vi" ${lang === "vi" ? "selected" : ""}>${escapeHtml(t("lang_vi"))}</option>
         </select>
       </div>
       <div class="qrs-settings-shortcut">
@@ -1284,6 +1366,12 @@ function initSnip({ empty }) {
         </div>
         <p class="qrs-settings-label-hint">${escapeHtml(t("shortcut_hint"))}</p>
         <button type="button" class="qrs-btn qrs-btn--ghost qrs-settings-shortcut-btn" id="qrs-open-shortcuts">${escapeHtml(t("set_shortcut"))}</button>
+      </div>
+      <div class="qrs-settings-support">
+        <span class="qrs-settings-label-title">${escapeHtml(t("support_title"))}</span>
+        <p class="qrs-settings-label-hint">${escapeHtml(t("support_hint"))}</p>
+        <a class="qrs-btn qrs-btn--primary qrs-settings-support-btn" id="qrs-support-rate" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("support_rate"))}</a>
+        <a class="qrs-bmc-btn qrs-settings-support-btn" id="qrs-support-coffee" href="${SUPPORT_URL}" target="_blank" rel="noopener noreferrer">${bmcButtonInner(t("support_coffee"))}</a>
       </div>
     `;
 
@@ -1396,5 +1484,20 @@ function initSnip({ empty }) {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  /** Buy Me a Coffee–style button contents (local SVG — no remote script). */
+  function bmcButtonInner(label) {
+    return `
+      <svg class="qrs-bmc-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path fill="#ffffff" stroke="#000000" stroke-width="1.4" stroke-linejoin="round"
+          d="M4.5 9.2h11.2v5.6c0 2.2-1.8 4-4 4H8.5c-2.2 0-4-1.8-4-4V9.2z"/>
+        <path fill="none" stroke="#000000" stroke-width="1.5" stroke-linecap="round"
+          d="M15.7 10.2h1.6c1.3 0 2.4 1.1 2.4 2.4s-1.1 2.4-2.4 2.4h-1.6"/>
+        <path fill="none" stroke="#000000" stroke-width="1.4" stroke-linecap="round"
+          d="M8.2 6.2c.4-.7 1-.7 1.4 0M11 5.6c.5-.9 1.2-.9 1.7 0M13.8 6.2c.4-.7 1-.7 1.4 0"/>
+      </svg>
+      <span>${escapeHtml(label)}</span>
+    `;
   }
 }

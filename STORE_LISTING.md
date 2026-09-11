@@ -1,4 +1,4 @@
-# QRSnip v2.6.1 — Chrome Web Store Listing
+# QRSnip v2.6.3 — Chrome Web Store Listing
 
 Copy these fields into the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 
