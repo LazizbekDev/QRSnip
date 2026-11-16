@@ -4,7 +4,11 @@ const HISTORY_KEY = "scanHistory";
 const HISTORY_MAX = 50;
 const SCAN_COUNT_KEY = "successfulScanCount";
 const REVIEW_PROMPT_DONE_KEY = "reviewPromptDone";
-const REVIEW_PROMPT_THRESHOLD = 5;
+const REVIEW_PROMPT_IMPRESSIONS_KEY = "reviewPromptImpressions";
+/** Ask after this many successful scans. */
+const REVIEW_PROMPT_THRESHOLD = 3;
+/** Stop asking after the strip was ignored in this many separate sessions. */
+const REVIEW_PROMPT_MAX_IMPRESSIONS = 3;
 const REVIEW_URL =
   "https://chromewebstore.google.com/detail/pjecadbnlcipeofmeammkpchfgeagmmg/reviews";
 const SUPPORT_URL = "https://www.buymeacoffee.com/lazizcore";
@@ -60,25 +64,46 @@ async function removeHistoryEntry(id) {
 }
 
 /**
- * Count a successful scan. Returns true when the review prompt may be shown
- * (threshold reached and not yet marked done). Call markReviewPromptDone()
- * once the banner is actually displayed.
- * @returns {Promise<boolean>}
+ * Count a successful scan (local counter only, never leaves the device).
+ * @returns {Promise<void>}
  */
 async function noteSuccessfulScan() {
-  const data = await chrome.storage.local.get([
-    SCAN_COUNT_KEY,
-    REVIEW_PROMPT_DONE_KEY,
-  ]);
-  if (data[REVIEW_PROMPT_DONE_KEY]) return false;
-
+  const data = await chrome.storage.local.get(SCAN_COUNT_KEY);
   const count = (Number(data[SCAN_COUNT_KEY]) || 0) + 1;
   await chrome.storage.local.set({ [SCAN_COUNT_KEY]: count });
-  return count >= REVIEW_PROMPT_THRESHOLD;
 }
 
 /**
- * Permanently hide the review prompt after it has been shown once.
+ * True when the rate strip may be shown: enough successful scans, the user
+ * has not answered it (rated / "Not now"), and it has not been ignored in
+ * too many sessions already. Asked of every user — no sentiment gating.
+ * @returns {Promise<boolean>}
+ */
+async function shouldShowReviewPrompt() {
+  const data = await chrome.storage.local.get([
+    SCAN_COUNT_KEY,
+    REVIEW_PROMPT_DONE_KEY,
+    REVIEW_PROMPT_IMPRESSIONS_KEY,
+  ]);
+  if (data[REVIEW_PROMPT_DONE_KEY]) return false;
+  if ((Number(data[REVIEW_PROMPT_IMPRESSIONS_KEY]) || 0) >= REVIEW_PROMPT_MAX_IMPRESSIONS) {
+    return false;
+  }
+  return (Number(data[SCAN_COUNT_KEY]) || 0) >= REVIEW_PROMPT_THRESHOLD;
+}
+
+/**
+ * Record that the strip was seen in one scanner session (call once per session).
+ * @returns {Promise<void>}
+ */
+async function noteReviewPromptImpression() {
+  const data = await chrome.storage.local.get(REVIEW_PROMPT_IMPRESSIONS_KEY);
+  const n = (Number(data[REVIEW_PROMPT_IMPRESSIONS_KEY]) || 0) + 1;
+  await chrome.storage.local.set({ [REVIEW_PROMPT_IMPRESSIONS_KEY]: n });
+}
+
+/**
+ * Never ask again — called only when the user explicitly rates or declines.
  * @returns {Promise<void>}
  */
 async function markReviewPromptDone() {

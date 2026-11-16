@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <title>QRSnip removed</title>
+  <style>
+    :root {
+      --bg: #f6f8fa;
+      --card: #ffffff;
+      --text: #111827;
+      --muted: #5b6676;
+      --border: #e3e8ee;
+      --accent: #0f9e8c;
+      --accent-soft: #e6f7f4;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0c1014;
+        --card: #161d27;
+        --text: #e6edf5;
+        --muted: #8b9bb0;
+        --border: rgba(230, 237, 245, 0.12);
+        --accent: #2dd4bf;
+        --accent-soft: rgba(45, 212, 191, 0.12);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", Helvetica, Arial, sans-serif;
+      line-height: 1.5;
+    }
+    main {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px 24px;
+    }
+    h1 { margin: 0 0 6px; font-size: 20px; }
+    p { margin: 0; color: var(--muted); font-size: 14px; }
+    .options { display: grid; gap: 8px; margin-top: 20px; }
+    .opt {
+      all: unset;
+      display: block;
+      padding: 11px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14.5px;
+      color: var(--text);
+      cursor: pointer;
+      text-align: start;
+      transition: border-color 120ms, background 120ms;
+    }
+    .opt:hover, .opt:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+    .opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .other { display: none; margin-top: 12px; }
+    .other.on { display: grid; gap: 8px; }
+    textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      resize: vertical;
+    }
+    .send {
+      all: unset;
+      justify-self: start;
+      padding: 9px 18px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #06201c;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .send:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .fine { margin-top: 18px; font-size: 12.5px; }
+    .fine a { color: var(--accent); }
+    .thanks { display: none; }
+    .done .ask { display: none; }
+    .done .thanks { display: block; }
+  </style>
+</head>
+<body>
+  <main id="root">
+    <div class="ask">
+      <h1 data-t="title"></h1>
+      <p data-t="sub"></p>
+      <div class="options" id="options"></div>
+      <div class="other" id="other">
+        <textarea id="detail" maxlength="500"></textarea>
+        <button type="button" class="send" id="send" data-t="send"></button>
+      </div>
+      <p class="fine"><span data-t="fine"></span> <a href="./" data-t="privacy"></a></p>
+    </div>
+    <div class="thanks">
+      <h1 data-t="thanks_title"></h1>
+      <p data-t="thanks_sub"></p>
+    </div>
+  </main>
+
+  <script>
+    // ── Answers go to a Google Form (short-answer questions). Fill these in
+    //    from the form's pre-filled link; until then nothing is sent.
+    const FORM = {
+      action: "https://docs.google.com/forms/d/e/1FAIpQLScUSNATLMAeLthpJ1QGSNAwU9TNkLeF-K8N-CY7rdzLIKkzFA/formResponse",
+      reason: "entry.1075330063",
+      detail: "entry.238709451",
+      version: "entry.1753179132",
+      lang: "entry.674114123",
+    };
+
+    // Stable codes are what gets stored; labels are only for display.
+    const REASONS = ["camera", "no_detect", "how_to_use", "once", "feature", "alternative", "mistake", "other"];
+
+    const STRINGS = {
+      en: {
+        title: "QRSnip has been removed",
+        sub: "One quick question, optional and anonymous: why did you remove it?",
+        camera: "I wanted to scan with my camera / webcam",
+        no_detect: "It didn’t detect my QR code or barcode",
+        how_to_use: "I couldn’t figure out how to use it",
+        once: "I only needed it once",
+        feature: "A feature I need is missing",
+        alternative: "I switched to another scanner",
+        mistake: "I installed it by mistake",
+        other: "Other…",
+        placeholder: "What went wrong? (please don’t include personal details)",
+        send: "Send",
+        fine: "We only receive your answer, the extension version and your browser language. No account, no tracking.",
+        privacy: "Privacy policy",
+        thanks_title: "Thank you",
+        thanks_sub: "Your answer helps make QRSnip better. You can close this tab.",
+      },
+      hi: {
+        title: "QRSnip हटा दिया गया है",
+        sub: "बस एक छोटा सवाल, वैकल्पिक और गुमनाम: आपने इसे क्यों हटाया?",
+        camera: "मुझे कैमरा / वेबकैम से स्कैन करना था",
+        no_detect: "इसने मेरा QR कोड या बारकोड नहीं पढ़ा",
+        how_to_use: "मुझे समझ नहीं आया कि इसे कैसे इस्तेमाल करें",
+        once: "मुझे इसकी सिर्फ़ एक बार ज़रूरत थी",
+        feature: "मुझे जिस फ़ीचर की ज़रूरत है वह नहीं है",
+        alternative: "अब मैं दूसरा स्कैनर इस्तेमाल करता/करती हूँ",
+        mistake: "मैंने इसे गलती से इंस्टॉल किया था",
+        other: "अन्य…",
+        placeholder: "क्या समस्या हुई? (कृपया निजी जानकारी न लिखें)",
+        send: "भेजें",
+        fine: "हमें केवल आपका जवाब, एक्सटेंशन का वर्शन और ब्राउज़र की भाषा मिलती है। कोई अकाउंट नहीं, कोई ट्रैकिंग नहीं।",
+        privacy: "गोपनीयता नीति",
+        thanks_title: "धन्यवाद",
+        thanks_sub: "आपका जवाब QRSnip को बेहतर बनाने में मदद करता है। आप यह टैब बंद कर सकते हैं।",
+      },
+      id: {
+        title: "QRSnip telah dihapus",
+        sub: "Satu pertanyaan singkat, opsional dan anonim: mengapa Anda menghapusnya?",
+        camera: "Saya ingin memindai dengan kamera / webcam",
+        no_detect: "Kode QR atau barcode saya tidak terdeteksi",
+        how_to_use: "Saya tidak tahu cara menggunakannya",
+        once: "Saya hanya butuh sekali",
+        feature: "Fitur yang saya butuhkan tidak ada",
+        alternative: "Saya beralih ke pemindai lain",
+        mistake: "Saya tidak sengaja memasangnya",
+        other: "Lainnya…",
+        placeholder: "Apa masalahnya? (jangan sertakan data pribadi)",
+        send: "Kirim",
+        fine: "Kami hanya menerima jawaban Anda, versi ekstensi, dan bahasa browser. Tanpa akun, tanpa pelacakan.",
+        privacy: "Kebijakan privasi",
+        thanks_title: "Terima kasih",
+        thanks_sub: "Jawaban Anda membantu QRSnip menjadi lebih baik. Anda dapat menutup tab ini.",
+      },
+      es: {
+        title: "QRSnip se ha desinstalado",
+        sub: "Una pregunta rápida, opcional y anónima: ¿por qué lo quitaste?",
+        camera: "Quería escanear con la cámara / webcam",
+        no_detect: "No detectó mi código QR o de barras",
+        how_to_use: "No entendí cómo usarlo",
+        once: "Solo lo necesitaba una vez",
+        feature: "Falta una función que necesito",
+        alternative: "Me cambié a otro escáner",
+        mistake: "Lo instalé por error",
+        other: "Otro…",
+        placeholder: "¿Qué salió mal? (no incluyas datos personales)",
+        send: "Enviar",
+        fine: "Solo recibimos tu respuesta, la versión de la extensión y el idioma del navegador. Sin cuenta, sin rastreo.",
+        privacy: "Política de privacidad",
+        thanks_title: "Gracias",
+        thanks_sub: "Tu respuesta ayuda a mejorar QRSnip. Ya puedes cerrar esta pestaña.",
+      },
+      ru: {
+        title: "QRSnip удалён",
+        sub: "Один короткий вопрос, по желанию и анонимно: почему вы его удалили?",
+        camera: "Нужно было сканировать камерой / веб-камерой",
+        no_detect: "Не распознал мой QR-код или штрихкод",
+        how_to_use: "Непонятно, как им пользоваться",
+        once: "Нужен был только один раз",
+        feature: "Не хватает нужной функции",
+        alternative: "Пользуюсь другим сканером",
+        mistake: "Установлено по ошибке",
+        other: "Другое…",
+        placeholder: "Что пошло не так? (не указывайте личные данные)",
+        send: "Отправить",
+        fine: "Мы получаем только ваш ответ, версию расширения и язык браузера. Без аккаунта и без отслеживания.",
+        privacy: "Политика конфиденциальности",
+        thanks_title: "Спасибо",
+        thanks_sub: "Ваш ответ помогает сделать QRSnip лучше. Эту вкладку можно закрыть.",
+      },
+      uz: {
+        title: "QRSnip o‘chirildi",
+        sub: "Bitta qisqa savol, ixtiyoriy va anonim: nega o‘chirdingiz?",
+        camera: "Kamera / veb-kamera bilan skanerlamoqchi edim",
+        no_detect: "QR kod yoki shtrix-kodimni aniqlamadi",
+        how_to_use: "Qanday ishlatishni tushunmadim",
+        once: "Faqat bir marta kerak edi",
+        feature: "Menga kerakli funksiya yo‘q",
+        alternative: "Boshqa skanerga o‘tdim",
+        mistake: "Adashib o‘rnatib qo‘ygandim",
+        other: "Boshqa…",
+        placeholder: "Nima noto‘g‘ri bo‘ldi? (shaxsiy ma’lumot yozmang)",
+        send: "Yuborish",
+        fine: "Biz faqat javobingizni, kengaytma versiyasini va brauzer tilini olamiz. Akkaunt yo‘q, kuzatuv yo‘q.",
+        privacy: "Maxfiylik siyosati",
+        thanks_title: "Rahmat",
+        thanks_sub: "Javobingiz QRSnip’ni yaxshilashga yordam beradi. Bu tabni yopishingiz mumkin.",
+      },
+    };
+
+    const params = new URLSearchParams(location.search);
+    const version = (params.get("v") || "").slice(0, 20);
+    const browserLang = (params.get("lang") || navigator.language || "en").slice(0, 20);
+    const base = browserLang.toLowerCase().split(/[-_]/)[0];
+    const L = STRINGS[base] || STRINGS.en;
+    document.documentElement.lang = STRINGS[base] ? base : "en";
+
+    document.querySelectorAll("[data-t]").forEach((el) => {
+      el.textContent = L[el.dataset.t];
+    });
+    document.getElementById("detail").placeholder = L.placeholder;
+
+    const root = document.getElementById("root");
+    const options = document.getElementById("options");
+    const other = document.getElementById("other");
+
+    function submit(reason, detail) {
+      root.classList.add("done");
+      if (!FORM.action || !FORM.reason) return;
+      const body = new URLSearchParams();
+      body.set(FORM.reason, reason);
+      if (FORM.detail && detail) body.set(FORM.detail, detail.slice(0, 500));
+      if (FORM.version) body.set(FORM.version, version);
+      if (FORM.lang) body.set(FORM.lang, browserLang);
+      // Google Forms has no CORS headers; the response is opaque but the entry is recorded.
+      fetch(FORM.action, { method: "POST", mode: "no-cors", body }).catch(() => {});
+    }
+
+    for (const code of REASONS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "opt";
+      b.textContent = L[code];
+      b.addEventListener("click", () => {
+        if (code === "other") {
+          other.classList.add("on");
+          document.getElementById("detail").focus();
+          return;
+        }
+        submit(code, "");
+      });
+      options.appendChild(b);
+    }
+
+    document.getElementById("send").addEventListener("click", () => {
+      submit("other", document.getElementById("detail").value.trim());
+    });
+  </script>
+</body>
+</html>

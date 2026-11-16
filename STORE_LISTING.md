@@ -236,7 +236,8 @@ Primary: English. Add the locale descriptions above under each language in the D
 - [x] Store icon: 128×128 PNG (`icons/icon128.png` / `store-assets/store-icon-128.png` from `store-icon-128-brand.png`)
 - [x] Small promo tile 440×280: `store-assets/promo/small-promo-440x280.png` (also `.jpg`; brand-only alt: `small-promo-440x280-brand.png`)
 - [x] Marquee promo tile 1400×560: `store-assets/promo/marquee-promo-1400x560.png` (also `.jpg`)
-- [ ] Privacy policy URL: host `index.html` publicly and paste that URL in the dashboard
+- [ ] Privacy policy URL: `https://lazizbekdev.github.io/QRSnip/` (GitHub Pages from this repo, `main` / root). Replace the old misspelled `qrsnipscaneer` URL in the dashboard.
+- [ ] Uninstall survey: `https://lazizbekdev.github.io/QRSnip/uninstall.html` — fill the `FORM` block in `uninstall.html` with the Google Form IDs.
 
 All promo tiles are **24-bit RGB (no alpha)** — Store-compliant.
 
@@ -254,7 +255,7 @@ Upload order in the Dashboard: 01 → 02 → 03 → 04.
 **Not requested:** `<all_urls>` — http(s) pages are covered by activeTab on user gesture.
 **Single purpose:** Scan QR codes and barcodes from the screen or images.
 **Remote code:** None
-**Data collection:** None (local-only processing)
+**Data collection:** None by the extension (local-only processing). The optional uninstall survey is a separate web page (see privacy policy §6).
 
 ## Shortcut note for users
 If Alt+Q / ⌥Q does not fire after update, set it at `chrome://extensions/shortcuts`.

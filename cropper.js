@@ -96,7 +96,8 @@ function initSnip({ empty, openHint }) {
   let autoScanRunning = false;
   let autoscanFoundCodes = false;
   let currentResults = [];
-  let pendingReviewPrompt = false;
+  let reviewImpressionCounted = false;
+  let reviewPromptTimer = null;
   let keyHandler = null;
   let activePointerId = null;
 
@@ -109,6 +110,7 @@ function initSnip({ empty, openHint }) {
 
   buildOverlay();
   bindGlobalDropPaste();
+  maybeShowReviewPrompt(1400);
   initDecoder().catch((err) => {
     console.error("[QRSnip] Decoder init failed:", err);
     showToast(t("toast_decoder_unavailable"), "error");
@@ -479,10 +481,8 @@ function initSnip({ empty, openHint }) {
     const parsed = parsePayload(det.rawValue, det.format);
     currentResults = [parsed];
     await addHistoryEntry({ format: parsed.format, type: parsed.type, raw: parsed.raw });
-    pendingReviewPrompt = await noteSuccessfulScan();
-    const showReview = pendingReviewPrompt;
-    pendingReviewPrompt = false;
-    showResultModal(parsed, { showReview });
+    await noteSuccessfulScan();
+    showResultModal(parsed);
   }
 
   function renderAutoscanChips(detections) {
@@ -646,12 +646,10 @@ function initSnip({ empty, openHint }) {
       await addHistoryEntry({ format: r.format, type: r.type, raw: r.raw });
     }
 
-    pendingReviewPrompt = await noteSuccessfulScan();
+    await noteSuccessfulScan();
 
     if (results.length === 1) {
-      const showReview = pendingReviewPrompt;
-      pendingReviewPrompt = false;
-      showResultModal(results[0], { showReview });
+      showResultModal(results[0]);
     } else {
       showMultiResultModal(results);
     }
@@ -702,12 +700,10 @@ function initSnip({ empty, openHint }) {
       await addHistoryEntry({ format: r.format, type: r.type, raw: r.raw });
     }
 
-    pendingReviewPrompt = await noteSuccessfulScan();
+    await noteSuccessfulScan();
 
     if (results.length === 1) {
-      const showReview = pendingReviewPrompt;
-      pendingReviewPrompt = false;
-      showResultModal(results[0], { showReview });
+      showResultModal(results[0]);
     } else {
       showMultiResultModal(results);
     }
@@ -804,7 +800,8 @@ function initSnip({ empty, openHint }) {
   }
 
   // ─── Result Modal (single) ───────────────────────────────────────────────
-  function showResultModal(parsed, { showReview = false } = {}) {
+  function showResultModal(parsed) {
+    dismissReviewPrompt(true);
     modalOpen = true;
     document.getElementById("qrs-modal")?.remove();
 
@@ -889,72 +886,65 @@ function initSnip({ empty, openHint }) {
     });
 
     wireResultModal(modal, parsed, primaryIsCopy);
-    if (showReview) {
-      scheduleReviewPrompt();
-    }
   }
 
-  let reviewPromptTimer = null;
+  // ─── Rate strip ──────────────────────────────────────────────────────────
+  // Small one-line ask above the dock. Shown only while the user is idle
+  // (no result modal / panel open), so it never competes with the scan result
+  // and is not torn down by "Open link". Asked of every user, no incentive.
+  // "Rate" or "Not now" ends it for good; ignoring it only counts an impression.
 
-  function scheduleReviewPrompt() {
+  function maybeShowReviewPrompt(delayMs = 700) {
     clearTimeout(reviewPromptTimer);
-    reviewPromptTimer = setTimeout(() => {
+    reviewPromptTimer = setTimeout(async () => {
       reviewPromptTimer = null;
+      if (modalOpen || historyOpen || settingsOpen) return;
+      if (document.getElementById("qrs-review-prompt")) return;
+      if (!(await shouldShowReviewPrompt())) return;
+      if (modalOpen || historyOpen || settingsOpen) return;
       showReviewPrompt();
-    }, 620);
+    }, delayMs);
   }
 
   function showReviewPrompt() {
-    dismissReviewPrompt(true);
-    markReviewPromptDone();
+    if (!reviewImpressionCounted) {
+      reviewImpressionCounted = true;
+      void noteReviewPromptImpression();
+    }
 
     const el = document.createElement("div");
     el.id = "qrs-review-prompt";
-    el.setAttribute("role", "dialog");
-    el.setAttribute("aria-label", "Feedback");
+    el.setAttribute("role", "status");
     el.innerHTML = `
-      <div class="qrs-review-card">
-        <button type="button" class="qrs-review-dismiss" id="qrs-review-dismiss" aria-label="${escapeHtml(t("dismiss"))}">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
-        <div class="qrs-review-icon" aria-hidden="true">
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z"/>
-          </svg>
-        </div>
-        <div class="qrs-review-copy">
-          <p class="qrs-review-title">${escapeHtml(t("review_title"))}</p>
-          <p class="qrs-review-sub">${escapeHtml(t("review_sub"))}</p>
-        </div>
-        <div class="qrs-review-actions">
-          <button type="button" class="qrs-btn qrs-btn--ghost" id="qrs-review-later">${escapeHtml(t("review_later"))}</button>
-          <a class="qrs-btn qrs-btn--primary" id="qrs-review-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("review_share"))}</a>
-          <a class="qrs-bmc-btn" id="qrs-review-coffee" href="${SUPPORT_URL}" target="_blank" rel="noopener noreferrer">${bmcButtonInner(t("support_coffee"))}</a>
-        </div>
-      </div>
+      <span class="qrs-review-star" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z"/>
+        </svg>
+      </span>
+      <span class="qrs-review-text">${escapeHtml(t("review_title"))}</span>
+      <a class="qrs-review-rate" id="qrs-review-link" href="${REVIEW_URL}" target="_blank" rel="noopener noreferrer">${escapeHtml(t("review_share"))}</a>
+      <button type="button" class="qrs-review-later" id="qrs-review-later">${escapeHtml(t("review_later"))}</button>
     `;
+
+    // Keep clicks on the strip from starting a snip selection underneath.
+    el.addEventListener("pointerdown", (e) => e.stopPropagation());
 
     document.documentElement.appendChild(el);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => el.classList.add("qrs-review-prompt--visible"));
     });
 
-    el.querySelector("#qrs-review-dismiss")?.addEventListener("click", () =>
-      dismissReviewPrompt()
-    );
-    el.querySelector("#qrs-review-later")?.addEventListener("click", () =>
-      dismissReviewPrompt()
-    );
-    el.querySelector("#qrs-review-link")?.addEventListener("click", () => {
-      setTimeout(() => dismissReviewPrompt(), 120);
+    el.querySelector("#qrs-review-later")?.addEventListener("click", () => {
+      void markReviewPromptDone();
+      dismissReviewPrompt();
     });
-    el.querySelector("#qrs-review-coffee")?.addEventListener("click", () => {
+    el.querySelector("#qrs-review-link")?.addEventListener("click", () => {
+      void markReviewPromptDone();
       setTimeout(() => dismissReviewPrompt(), 120);
     });
   }
 
+  /** Hide the strip for now (does not mark it answered). */
   function dismissReviewPrompt(instant) {
     clearTimeout(reviewPromptTimer);
     reviewPromptTimer = null;
@@ -966,7 +956,7 @@ function initSnip({ empty, openHint }) {
     }
     el.classList.remove("qrs-review-prompt--visible");
     el.classList.add("qrs-review-prompt--out");
-    setTimeout(() => el.remove(), 320);
+    setTimeout(() => el.remove(), 260);
   }
 
   function wireResultModal(modal, parsed, primaryIsCopy) {
@@ -1083,6 +1073,7 @@ function initSnip({ empty, openHint }) {
 
   // ─── Multi Result Modal ──────────────────────────────────────────────────
   function showMultiResultModal(results) {
+    dismissReviewPrompt(true);
     modalOpen = true;
     document.getElementById("qrs-modal")?.remove();
 
@@ -1157,10 +1148,8 @@ function initSnip({ empty, openHint }) {
     modal.querySelectorAll(".qrs-result-item").forEach((btn) => {
       btn.addEventListener("click", () => {
         const idx = Number(btn.dataset.index);
-        const showReview = pendingReviewPrompt;
-        pendingReviewPrompt = false;
         modal.remove();
-        showResultModal(results[idx], { showReview });
+        showResultModal(results[idx]);
       });
     });
 
@@ -1179,6 +1168,7 @@ function initSnip({ empty, openHint }) {
         closeWindow();
       } else {
         resetSelection();
+        maybeShowReviewPrompt();
       }
     }, 280);
   }
@@ -1190,6 +1180,7 @@ function initSnip({ empty, openHint }) {
       return;
     }
     closeSettingsPanel();
+    dismissReviewPrompt(true);
     historyOpen = true;
     document.getElementById("qrs-history-panel")?.remove();
 
@@ -1277,6 +1268,7 @@ function initSnip({ empty, openHint }) {
     setTimeout(() => {
       panel.remove();
       historyOpen = false;
+      maybeShowReviewPrompt();
     }, 220);
   }
 
@@ -1298,6 +1290,7 @@ function initSnip({ empty, openHint }) {
       return;
     }
     closeHistoryPanel();
+    dismissReviewPrompt(true);
     settingsOpen = true;
     document.getElementById("qrs-settings-panel")?.remove();
 
@@ -1431,6 +1424,7 @@ function initSnip({ empty, openHint }) {
     setTimeout(() => {
       panel.remove();
       settingsOpen = false;
+      maybeShowReviewPrompt();
     }, 220);
   }
 

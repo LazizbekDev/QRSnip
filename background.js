@@ -11,6 +11,22 @@ const SCAN_SESSION_KEYS = [
   "openHint",
 ];
 
+// Optional one-question survey shown by Chrome after uninstall. Only the
+// extension version and browser UI language are passed — no IDs, no usage data.
+const UNINSTALL_SURVEY_URL = "https://lazizbekdev.github.io/QRSnip/uninstall.html";
+
+function registerUninstallSurvey() {
+  const q = new URLSearchParams({
+    v: chrome.runtime.getManifest().version,
+    lang: chrome.i18n.getUILanguage(),
+  });
+  chrome.runtime.setUninstallURL(`${UNINSTALL_SURVEY_URL}?${q}`).catch((err) => {
+    console.warn("[QRSnip] setUninstallURL failed:", err);
+  });
+}
+
+registerUninstallSurvey();
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
