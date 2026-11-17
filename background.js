@@ -98,38 +98,74 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type !== "qrsnip-close") return;
-  void closeCropperSession(sender.tab?.id).then(() => sendResponse({ ok: true }));
-  return true;
+  if (msg.type === "qrsnip-close") {
+    void closeCropperSession(sender.tab?.id).then(() => sendResponse({ ok: true }));
+    return true;
+  }
+  if (msg.type === "qrsnip-retry") {
+    void retryCapture(sender.tab?.id)
+      .then(sendResponse)
+      .catch((err) => {
+        console.error("[QRSnip] Retry failed:", err);
+        sendResponse({ ok: false });
+      });
+    return true;
+  }
 });
 
 /**
- * Pages Chrome cannot capture (chrome://, Web Store, extension pages, etc.).
+ * Why a URL can never be captured by an extension, or null if it can.
+ * Shown to the user as a specific explanation instead of a black screen.
  * @param {string|undefined} url
- * @returns {boolean}
+ * @returns {null|"webstore"|"browser_page"|"extension_page"}
  */
-function isRestrictedCaptureUrl(url) {
-  if (!url || typeof url !== "string") return false;
+function classifyRestrictedUrl(url) {
+  if (!url || typeof url !== "string") return null;
   try {
     const u = new URL(url);
     const proto = u.protocol;
     if (
-      proto === "chrome:" ||
-      proto === "chrome-extension:" ||
-      proto === "edge:" ||
-      proto === "about:" ||
-      proto === "devtools:" ||
-      proto === "view-source:"
+      [
+        "chrome:",
+        "brave:",
+        "edge:",
+        "opera:",
+        "vivaldi:",
+        "arc:",
+        "about:",
+        "chrome-search:",
+        "chrome-untrusted:",
+        "chrome-native:",
+        "devtools:",
+        "view-source:",
+      ].includes(proto)
     ) {
-      return true;
+      return "browser_page";
     }
+    if (proto === "chrome-extension:" || proto === "extension:") return "extension_page";
     const host = u.hostname;
-    if (host === "chromewebstore.google.com") return true;
-    if (host === "chrome.google.com" && u.pathname.includes("/webstore")) return true;
+    if (host === "chromewebstore.google.com") return "webstore";
+    if (host === "chrome.google.com" && u.pathname.startsWith("/webstore")) return "webstore";
+    if (host === "microsoftedge.microsoft.com" && u.pathname.startsWith("/addons")) return "webstore";
   } catch (_) {
-    return false;
+    return null;
   }
-  return false;
+  return null;
+}
+
+/**
+ * Map a captureVisibleTab error to a user-facing reason.
+ * @param {unknown} err
+ * @returns {"webstore"|"browser_page"|"policy"|"rate"|"no_access"|"capture_failed"}
+ */
+function classifyCaptureError(err) {
+  const msg = String(err?.message || err || "");
+  if (/gallery cannot be scripted|webstore/i.test(msg)) return "webstore";
+  if (/cannot access a [a-z-]+:\/\/ url|chrome:\/\/|edge:\/\/|brave:\/\//i.test(msg)) return "browser_page";
+  if (/policy|runtime_blocked_hosts/i.test(msg)) return "policy";
+  if (/MAX_CAPTURE_VISIBLE_TAB_CALLS_PER_SECOND/i.test(msg)) return "rate";
+  if (/cannot access|activeTab|permission|not allowed/i.test(msg)) return "no_access";
+  return "capture_failed";
 }
 
 /**
@@ -144,61 +180,111 @@ async function captureVisibleTabDataUrl(windowId, quality = 92) {
       format: "jpeg",
       quality,
     });
-  } catch (_) {
+  } catch (err) {
+    if (classifyCaptureError(err) !== "capture_failed") throw err;
     return await chrome.tabs.captureVisibleTab(windowId, { format: "png" });
   }
 }
 
-async function captureAndOpenCropper(tab) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function isFileAccessAllowed() {
+  try {
+    return await chrome.extension.isAllowedFileSchemeAccess();
+  } catch (_) {
+    return true;
+  }
+}
+
+/**
+ * Capture the tab and write the cropper session (image, or a reason hint).
+ * Never opens a tab.
+ * @param {chrome.tabs.Tab} tab
+ */
+async function captureToSession(tab) {
   const isFileTab = typeof tab?.url === "string" && tab.url.startsWith("file://");
 
-  if (isRestrictedCaptureUrl(tab?.url)) {
-    await openCropperTab(tab, { scanSource: "empty", openHint: "restricted" }, { omitCapture: true });
+  const restricted = classifyRestrictedUrl(tab?.url);
+  if (restricted) {
+    await persistCropperSession(tab, { scanSource: "empty", openHint: restricted }, { omitCapture: true });
+    return;
+  }
+
+  if (isFileTab && !(await isFileAccessAllowed())) {
+    await persistCropperSession(tab, { scanSource: "empty", openHint: "file_access" }, { omitCapture: true });
+    return;
+  }
+
+  let dataUrl;
+  try {
+    try {
+      dataUrl = await captureVisibleTabDataUrl(tab.windowId, 92);
+    } catch (err) {
+      // Chrome rate-limits captures to ~2/s; one patient retry is enough.
+      if (classifyCaptureError(err) !== "rate") throw err;
+      await sleep(650);
+      dataUrl = await captureVisibleTabDataUrl(tab.windowId, 92);
+    }
+  } catch (err) {
+    console.error("[QRSnip] Capture failed:", err);
+    let reason = classifyCaptureError(err);
+    if (reason === "rate") reason = "capture_failed";
+    if (isFileTab) reason = "file_access";
+    await persistCropperSession(tab, { scanSource: "empty", openHint: reason }, { omitCapture: true });
     return;
   }
 
   try {
-    let dataUrl = await captureVisibleTabDataUrl(tab.windowId, 92);
+    await persistCropperSession(tab, { capturedImage: dataUrl, scanSource: "capture" });
+  } catch (storeErr) {
+    console.warn("[QRSnip] Storage set failed, retrying smaller capture:", storeErr);
     try {
-      await persistCropperSession(tab, {
-        capturedImage: dataUrl,
-        scanSource: "capture",
-      });
-    } catch (storeErr) {
-      console.warn("[QRSnip] Storage set failed, retrying smaller capture:", storeErr);
       dataUrl = await captureVisibleTabDataUrl(tab.windowId, 72);
-      try {
-        await persistCropperSession(tab, {
-          capturedImage: dataUrl,
-          scanSource: "capture",
-        });
-      } catch (storeErr2) {
-        console.error("[QRSnip] Storage quota exhausted:", storeErr2);
-        await openCropperTab(
-          tab,
-          { scanSource: "empty", openHint: "quota" },
-          { omitCapture: true }
-        );
-        return;
-      }
+      await persistCropperSession(tab, { capturedImage: dataUrl, scanSource: "capture" });
+    } catch (storeErr2) {
+      console.error("[QRSnip] Storage quota exhausted:", storeErr2);
+      await persistCropperSession(tab, { scanSource: "empty", openHint: "quota" }, { omitCapture: true });
     }
-    await createCropperTab(tab);
-  } catch (err) {
-    console.error("[QRSnip] Capture failed:", err);
-
-    if (isFileTab) {
-      await chrome.tabs.create({
-        url: `chrome://extensions/?id=${chrome.runtime.id}`,
-      });
-      return;
-    }
-
-    await openCropperTab(
-      tab,
-      { scanSource: "empty", openHint: "capture_failed" },
-      { omitCapture: true }
-    );
   }
+}
+
+async function captureAndOpenCropper(tab) {
+  await captureToSession(tab);
+  await createCropperTab(tab);
+}
+
+/**
+ * "Try again" from the cropper's notice card: briefly re-focus the source tab,
+ * re-capture it, then reload the cropper with the fresh result.
+ * @param {number|undefined} senderTabId
+ */
+async function retryCapture(senderTabId) {
+  const { sourceTabId, cropperTabId } = await chrome.storage.local.get([
+    "sourceTabId",
+    "cropperTabId",
+  ]);
+  const cropperId = cropperTabId ?? senderTabId;
+  let tab;
+  try {
+    tab = await chrome.tabs.get(sourceTabId);
+  } catch (_) {
+    return { ok: false, reason: "source_gone" };
+  }
+
+  await chrome.tabs.update(tab.id, { active: true });
+  await sleep(350);
+  tab = await chrome.tabs.get(tab.id);
+  await captureToSession(tab);
+
+  if (cropperId) {
+    try {
+      await chrome.tabs.update(cropperId, { active: true });
+      await chrome.tabs.reload(cropperId);
+    } catch (_) {
+      await createCropperTab(tab);
+    }
+  }
+  return { ok: true };
 }
 
 async function openEmptyCropper(tab) {

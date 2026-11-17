@@ -20,6 +20,7 @@ cp "$ROOT/background.js" "$TMP/"
 cp "$ROOT/cropper.html" "$TMP/"
 cp "$ROOT/cropper.js" "$TMP/"
 cp "$ROOT/decoder.js" "$TMP/"
+cp "$ROOT/linkcheck.js" "$TMP/"
 cp "$ROOT/payload.js" "$TMP/"
 cp "$ROOT/history.js" "$TMP/"
 cp "$ROOT/settings.js" "$TMP/"
@@ -44,7 +45,7 @@ import json, os, zipfile
 
 m = json.load(open("dist/staging/manifest.json"))
 assert m["manifest_version"] == 3
-assert m["version"] == "2.6.6", m["version"]
+assert m["version"] == "2.7.0", m["version"]
 assert m.get("default_locale") == "en"
 assert "tabs" in m.get("permissions", []), "tabs permission required for scanner tab return"
 assert "<all_urls>" not in m.get("host_permissions", []), "<all_urls> should stay removed"
@@ -69,6 +70,7 @@ ALLOWED = {
     "cropper.html",
     "cropper.js",
     "decoder.js",
+    "linkcheck.js",
     "payload.js",
     "history.js",
     "settings.js",

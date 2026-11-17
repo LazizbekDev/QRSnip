@@ -1,4 +1,4 @@
-# QRSnip v2.6.3 — Chrome Web Store Listing
+# QRSnip v2.7.0 — Chrome Web Store Listing
 
 Copy these fields into the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 
@@ -19,6 +19,17 @@ Length: 121 characters.
 
 ---
 
+## What's new in 2.7.0 (release notes)
+```
+• Link safety check: see the real domain and get warned about phishing tricks before opening a scanned link — fully offline
+• Save contacts (.vcf) and add events to your calendar (.ics) in one click
+• Clear payment details for UPI, PIX, SEPA, PromptPay, QRIS, VietQR, PayNow and crypto wallets
+• Product barcodes show the registration country and a product search; ISBN for books
+• When a page can't be captured (Chrome Web Store, browser pages, DRM video), QRSnip now explains why instead of showing a black screen
+```
+
+---
+
 ## Detailed description — English
 ```
 Need to scan a QR code without reaching for your phone?
@@ -31,7 +42,10 @@ What makes QRSnip different?
 • Works as a QR snipping tool — draw a selection on any webpage, just like a screenshot tool
 • Scan QR codes from images you drop or paste, including codes inside PDFs opened in Chrome
 • Offline QR reader — no server, no cloud, no tracking. Decoding happens 100% locally
-• Smart actions — links open automatically, Wi-Fi passwords are ready to copy, contacts and locations just work
+• Link safety check — before you open a scanned link, QRSnip highlights the real domain and warns about phishing tricks: lookalike letters, fake "@" addresses, shortened links, unencrypted pages and app downloads. Checked offline, nothing is sent anywhere
+• Smart actions — links open, Wi-Fi passwords are ready to copy, contacts save as a .vcf file, events go straight to your calendar (.ics)
+• Payment codes shown clearly — UPI, PIX, SEPA/EPC (GiroCode), PromptPay, QRIS, VietQR, PayNow and crypto wallets with payee, amount and account
+• Product barcodes — EAN/UPC with the GS1 registration country and a one-click product search; ISBN for books
 • Reads QR codes and many common 1D and 2D barcodes used on websites, receipts, and product labels
 • Detects multiple codes in a single selection
 • Local scan history you can revisit or clear anytime

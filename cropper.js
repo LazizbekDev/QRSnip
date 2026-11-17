@@ -7,13 +7,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   const data = await waitForCapturedImage();
   const bgImg = document.getElementById("screenshot-bg");
   const openHint = data.openHint;
+  sessionReturnUrl = typeof data.returnUrl === "string" ? data.returnUrl : "";
 
   if (openHint) {
     chrome.storage.local.remove(["openHint"]);
   }
 
   if (!data.capturedImage) {
-    // Empty state — allow drop/paste without a prior capture
+    // Empty state — explain why (if we know) and allow drop/paste/pick.
     bgImg.style.display = "none";
     document.body.classList.add("qrs-empty");
     void initSnip({ empty: true, openHint: openHint || null });
@@ -21,17 +22,87 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   bgImg.onload = () => {
+    // Protected (DRM) video and some secure surfaces capture as solid black.
+    if (isBlankCapture(bgImg)) {
+      bgImg.style.display = "none";
+      bgImg.removeAttribute("src");
+      document.body.classList.add("qrs-empty");
+      void initSnip({ empty: true, openHint: "protected" });
+      return;
+    }
     void initSnip({ empty: false, openHint: null });
   };
   bgImg.onerror = () => {
-    showBootstrapToast(t("toast_screenshot_fail"), "error");
-    void initSnip({ empty: true, openHint: null });
+    bgImg.style.display = "none";
+    document.body.classList.add("qrs-empty");
+    void initSnip({ empty: true, openHint: "capture_failed" });
   };
   bgImg.src = data.capturedImage;
 
   // Clear transient capture after load so storage stays lean
   chrome.storage.local.remove(["capturedImage", "scanSource"]);
 });
+
+// Notice card presets — module scope so initSnip can use them immediately.
+const NOTICE_ICONS = {
+  lock: `<rect x="4" y="10.5" width="16" height="10.5" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 018 0v3"/><circle cx="12" cy="15.5" r="1.3"/>`,
+  shield: `<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6L12 3z"/><path d="M9 12l2 2 4-4"/>`,
+  eyeoff: `<path d="M3 3l18 18"/><path d="M10.6 5.1A10.4 10.4 0 0112 5c6.5 0 10 7 10 7a17.6 17.6 0 01-3.3 4.2"/><path d="M6.6 6.6C3.9 8.4 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.4"/><path d="M9.9 9.9a3 3 0 004.2 4.2"/>`,
+  folder: `<path d="M3 7a2 2 0 012-2h4l2 2.5h8a2 2 0 012 2V17a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/><path d="M12 11v4"/><path d="M10 13h4"/>`,
+  alert: `<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>`,
+  expand: `<path d="M4 14v6h6"/><path d="M20 10V4h-6"/><path d="M4 20l7-7"/><path d="M20 4l-7 7"/>`,
+};
+
+/** reason → presentation. tone: "lock" (by design) | "warn" (try again). */
+const NOTICE_REASONS = {
+  webstore: { icon: "lock", tone: "lock", eyebrow: "notice_eyebrow_protected", actions: ["choose", "back"] },
+  browser_page: { icon: "shield", tone: "lock", eyebrow: "notice_eyebrow_protected", actions: ["choose", "back"] },
+  extension_page: { icon: "shield", tone: "lock", eyebrow: "notice_eyebrow_protected", actions: ["choose", "back"] },
+  policy: { icon: "lock", tone: "lock", eyebrow: "notice_eyebrow_protected", actions: ["choose", "back"] },
+  file_access: { icon: "folder", tone: "warn", eyebrow: "notice_eyebrow_permission", actions: ["file_settings", "choose"] },
+  no_access: { icon: "alert", tone: "warn", eyebrow: "notice_eyebrow_failed", actions: ["retry", "choose"] },
+  protected: { icon: "eyeoff", tone: "warn", eyebrow: "notice_eyebrow_blank", actions: ["retry", "choose"] },
+  capture_failed: { icon: "alert", tone: "warn", eyebrow: "notice_eyebrow_failed", actions: ["retry", "choose"] },
+  quota: { icon: "expand", tone: "warn", eyebrow: "notice_eyebrow_failed", actions: ["choose", "back"] },
+};
+
+const ACTION_ICONS = {
+  choose: `<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/>`,
+  retry: `<path d="M21 12a9 9 0 11-3-6.7L21 8"/><path d="M21 3v5h-5"/>`,
+  back: `<path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/>`,
+  file_settings: `<path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/>`,
+};
+
+/** URL of the page the user was on (for the notice card's host chip). */
+let sessionReturnUrl = "";
+
+/**
+ * True when a screenshot is (almost) uniformly black — what Chrome returns for
+ * DRM-protected video and some hardware-accelerated / secure surfaces.
+ * @param {HTMLImageElement} img
+ */
+function isBlankCapture(img) {
+  try {
+    const size = 64;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, size, size);
+    const { data } = ctx.getImageData(0, 0, size, size);
+    let max = 0;
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      sum += lum;
+      if (lum > max) max = lum;
+    }
+    const mean = sum / (data.length / 4);
+    return mean < 8 && max < 32;
+  } catch (_) {
+    return false;
+  }
+}
 
 /**
  * Retry briefly if background wrote storage just after tab create (legacy race / slow I/O).
@@ -100,6 +171,7 @@ function initSnip({ empty, openHint }) {
   let reviewPromptTimer = null;
   let keyHandler = null;
   let activePointerId = null;
+  let activeNotice = null;
 
   void getSettings().then((s) => {
     autoScanEnabled = s.autoScanEnabled;
@@ -116,12 +188,8 @@ function initSnip({ empty, openHint }) {
     showToast(t("toast_decoder_unavailable"), "error");
   });
 
-  if (openHint === "restricted") {
-    showToast(t("toast_restricted_page"), "info");
-  } else if (openHint === "capture_failed") {
-    showToast(t("toast_capture_failed"), "error");
-  } else if (openHint === "quota") {
-    showToast(t("toast_capture_quota"), "error");
+  if (openHint) {
+    showNotice(openHint === "restricted" ? "browser_page" : openHint);
   } else if (pendingBootstrapToast) {
     showToast(pendingBootstrapToast.message, pendingBootstrapToast.type);
     pendingBootstrapToast = null;
@@ -144,11 +212,11 @@ function initSnip({ empty, openHint }) {
     const dock = document.createElement("div");
     dock.id = "qrs-dock";
     dock.innerHTML = `
-      <span class="qrs-dock-hint" id="qrs-dock-hint">
+      <span class="qrs-dock-hint" id="qrs-dock-hint" title="${escapeHtml(empty ? t("hint_drop") : t("hint_drag"))}">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/>
         </svg>
-        ${escapeHtml(empty ? t("hint_drop") : t("hint_drag"))}
+        <span class="qrs-dock-hint-text">${escapeHtml(empty ? t("hint_drop") : t("hint_drag"))}</span>
       </span>
       <span class="qrs-dock-sep" aria-hidden="true"></span>
       <kbd class="qrs-kbd">Esc</kbd>
@@ -235,17 +303,137 @@ function initSnip({ empty, openHint }) {
     }
   }
 
+  // ─── Notice card (why there is no screenshot) ────────────────────────────
+  function svgIcon(paths, size) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  }
+
+  function noticeHost() {
+    try {
+      const u = new URL(sessionReturnUrl);
+      if (u.protocol === "file:") return decodeURIComponent(u.pathname.split("/").pop() || "file");
+      if (u.protocol === "http:" || u.protocol === "https:") return u.hostname;
+      return `${u.protocol}//${u.hostname}`;
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function pasteShortcutLabel() {
+    return /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent) ? "⌘V" : "Ctrl+V";
+  }
+
+  function showNotice(reason) {
+    const cfg = NOTICE_REASONS[reason] || NOTICE_REASONS.capture_failed;
+    if (!NOTICE_REASONS[reason]) reason = "capture_failed";
+    activeNotice = reason;
+    document.getElementById("qrs-notice")?.remove();
+
+    const host = noticeHost();
+    const actionLabel = {
+      choose: t("notice_action_choose"),
+      retry: t("notice_action_retry"),
+      back: t("notice_action_back"),
+      file_settings: t("notice_action_file_settings"),
+    };
+
+    const buttons = cfg.actions
+      .map(
+        (a, i) => `
+        <button type="button" class="qrs-notice-btn ${i === 0 ? "qrs-notice-btn--primary" : ""}" data-action="${a}">
+          ${svgIcon(ACTION_ICONS[a], 15)}
+          <span>${escapeHtml(actionLabel[a])}</span>
+        </button>`
+      )
+      .join("");
+
+    const card = document.createElement("div");
+    card.id = "qrs-notice";
+    card.className = `qrs-notice qrs-notice--${cfg.tone}`;
+    card.setAttribute("role", "alertdialog");
+    card.setAttribute("aria-labelledby", "qrs-notice-title");
+    card.setAttribute("aria-describedby", "qrs-notice-body");
+    card.innerHTML = `
+      <div class="qrs-notice-glow" aria-hidden="true"></div>
+      <div class="qrs-notice-icon">${svgIcon(NOTICE_ICONS[cfg.icon], 26)}</div>
+      <div class="qrs-notice-eyebrow">${escapeHtml(t(cfg.eyebrow))}</div>
+      <h2 class="qrs-notice-title" id="qrs-notice-title">${escapeHtml(t(`notice_${reason}_title`))}</h2>
+      <p class="qrs-notice-body" id="qrs-notice-body">${escapeHtml(t(`notice_${reason}_body`))}</p>
+      ${
+        host
+          ? `<div class="qrs-notice-host" dir="ltr">${svgIcon(NOTICE_ICONS.lock, 12)}<span>${escapeHtml(host)}</span></div>`
+          : ""
+      }
+      <div class="qrs-notice-actions">${buttons}</div>
+      <div class="qrs-notice-foot">
+        <span>${escapeHtml(t("notice_alt"))}</span>
+        <kbd class="qrs-kbd">${escapeHtml(pasteShortcutLabel())}</kbd>
+      </div>
+      <input type="file" accept="image/*" id="qrs-notice-file" hidden>
+    `;
+    overlay.appendChild(card);
+    overlay.classList.add("qrs-overlay--notice");
+
+    const fileInput = card.querySelector("#qrs-notice-file");
+    fileInput.addEventListener("change", () => {
+      const file = fileInput.files?.[0];
+      if (file) void loadImageFile(file);
+    });
+
+    card.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      e.stopPropagation();
+      const action = btn.dataset.action;
+      if (action === "choose") fileInput.click();
+      else if (action === "back") closeWindow();
+      else if (action === "file_settings") {
+        chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
+      } else if (action === "retry") retryFromNotice(btn);
+    });
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        card.classList.add("qrs-notice--visible");
+        card.querySelector(".qrs-notice-btn--primary")?.focus({ preventScroll: true });
+      });
+    });
+  }
+
+  function retryFromNotice(btn) {
+    if (btn.classList.contains("qrs-notice-btn--busy")) return;
+    btn.classList.add("qrs-notice-btn--busy");
+    chrome.runtime.sendMessage({ type: "qrsnip-retry" }, (res) => {
+      // On success the background reloads this tab with the fresh capture.
+      if (chrome.runtime.lastError || !res?.ok) {
+        btn.classList.remove("qrs-notice-btn--busy");
+        showToast(t(res?.reason === "source_gone" ? "notice_source_gone" : "toast_capture_failed"), "error");
+      }
+    });
+  }
+
+  function hideNotice() {
+    activeNotice = null;
+    overlay?.classList.remove("qrs-overlay--notice");
+    const card = document.getElementById("qrs-notice");
+    if (!card) return;
+    card.classList.remove("qrs-notice--visible");
+    setTimeout(() => card.remove(), 220);
+  }
+
   // ─── Pointer (mouse + touch + pen) ───────────────────────────────────────
   function onPointerDown(e) {
     if (modalOpen || historyOpen || settingsOpen) return;
     if (
       e.target.closest("#qrs-dock") ||
+      e.target.closest("#qrs-notice") ||
       e.target.closest("#qrs-history-panel") ||
       e.target.closest("#qrs-settings-panel") ||
       e.target.closest(".qrs-autoscan-chip")
     ) {
       return;
     }
+    if (activeNotice) return;
     if (!canManualSnip()) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
@@ -421,7 +609,8 @@ function initSnip({ empty, openHint }) {
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/>
       </svg>
-      ${escapeHtml(text)}`;
+      <span class="qrs-dock-hint-text">${escapeHtml(text)}</span>`;
+    hint.title = text;
   }
 
   function clearAutoscanChips() {
@@ -741,6 +930,7 @@ function initSnip({ empty, openHint }) {
   async function loadImageFile(file) {
     const dataUrl = await readFileAsDataURL(file);
     const bgImg = document.getElementById("screenshot-bg");
+    hideNotice();
     bgImg.style.display = "block";
     document.body.classList.remove("qrs-empty");
 
@@ -812,6 +1002,7 @@ function initSnip({ empty, openHint }) {
 
     const primary = parsed.primary;
     const primaryIsCopy = primary && (primary.id === "copy" || primary.id === "copy_password");
+    const linkDanger = primary?.id === "open" && parsed.link?.level === "danger";
 
     modal.innerHTML = `
       <div class="qrs-modal-inner">
@@ -826,6 +1017,7 @@ function initSnip({ empty, openHint }) {
             <div class="qrs-chips">
               <span class="qrs-chip qrs-chip--format" style="animation-delay:40ms">${typeChipIcon(parsed.type)}${escapeHtml(parsed.formatLabel)}</span>
               <span class="qrs-chip qrs-chip--type" style="animation-delay:90ms">${escapeHtml(parsed.typeLabel)}</span>
+              ${parsed.network ? `<span class="qrs-chip qrs-chip--type" style="animation-delay:140ms">${escapeHtml(parsed.network)}</span>` : ""}
             </div>
           </div>
           <div class="qrs-modal-header-actions">
@@ -843,14 +1035,7 @@ function initSnip({ empty, openHint }) {
         </div>
 
         <div class="qrs-modal-body">
-          <div class="qrs-result-plate">
-            <p class="qrs-result-text">${escapeHtml(parsed.display)}</p>
-            <button type="button" class="qrs-result-copy-inline" id="qrs-copy-inline" title="${escapeHtml(t("copy"))}" aria-label="${escapeHtml(t("copy"))}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-              </svg>
-            </button>
-          </div>
+          ${renderResultBody(parsed)}
         </div>
 
         <div class="qrs-modal-actions">
@@ -870,9 +1055,9 @@ function initSnip({ empty, openHint }) {
           }
           ${
             primary
-              ? `<button class="qrs-btn qrs-btn--primary" id="qrs-primary-btn" type="button">
+              ? `<button class="qrs-btn ${linkDanger ? "qrs-btn--danger" : "qrs-btn--primary"}" id="qrs-primary-btn" type="button">
                   ${primaryActionIcon(primary.id)}
-                  ${escapeHtml(primary.label)}
+                  ${escapeHtml(linkDanger ? t("open_anyway") : primary.label)}
                 </button>`
               : `<button class="qrs-btn qrs-btn--primary" id="qrs-copy-btn" type="button">${escapeHtml(t("copy"))}</button>`
           }
@@ -898,10 +1083,11 @@ function initSnip({ empty, openHint }) {
     clearTimeout(reviewPromptTimer);
     reviewPromptTimer = setTimeout(async () => {
       reviewPromptTimer = null;
-      if (modalOpen || historyOpen || settingsOpen) return;
+      // Never ask for a rating while we're explaining why capture didn't work.
+      if (modalOpen || historyOpen || settingsOpen || activeNotice) return;
       if (document.getElementById("qrs-review-prompt")) return;
       if (!(await shouldShowReviewPrompt())) return;
-      if (modalOpen || historyOpen || settingsOpen) return;
+      if (modalOpen || historyOpen || settingsOpen || activeNotice) return;
       showReviewPrompt();
     }, delayMs);
   }
@@ -993,6 +1179,8 @@ function initSnip({ empty, openHint }) {
         const result = await runPrimaryAction(parsed.primary);
         if (result === "copied") {
           markCopied(primaryBtn);
+        } else if (result === "saved") {
+          markCopied(primaryBtn, t("saved"));
         } else if (result === "opened") {
           dismissModal(modal, false);
         }
@@ -1014,12 +1202,15 @@ function initSnip({ empty, openHint }) {
     openHistoryPanel();
   }
 
-  function markCopied(btn) {
-    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ${escapeHtml(t("copied"))}`;
+  function markCopied(btn, label) {
+    btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> ${escapeHtml(label || t("copied"))}`;
     btn.classList.add("qrs-btn--copied");
   }
 
   function primaryActionIcon(id) {
+    if (id === "download") {
+      return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+    }
     if (id === "open" || id === "maps") {
       return `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`;
     }
@@ -1060,7 +1251,110 @@ function initSnip({ empty, openHint }) {
     if (t === "geo" || t === "maps") {
       return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
     }
+    if (t === "event") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`;
+    }
+    if (t === "payment") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg>`;
+    }
+    if (t === "crypto") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7h5a3 3 0 010 6H9z"/><path d="M9 13h6a3 3 0 010 6H9zM9 5v16M11 3v2M11 21v-2"/></svg>`;
+    }
+    if (t === "book") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5A2.5 2.5 0 004 5.5z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/></svg>`;
+    }
+    if (t === "product") {
+      return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 01-2.8 0L3 13V3h10l7.6 7.6a2 2 0 010 2.8z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>`;
+    }
     return formatGlyph("barcode");
+  }
+
+  // ─── Rich result bodies (link inspector / field list) ────────────────────
+  const COPY_SVG = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+
+  function copyInlineButton() {
+    return `<button type="button" class="qrs-result-copy-inline" id="qrs-copy-inline" title="${escapeHtml(t("copy"))}" aria-label="${escapeHtml(t("copy"))}">${COPY_SVG}</button>`;
+  }
+
+  const LEVEL_ICONS = {
+    safe: `<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6L12 3z"/><path d="M9 12l2 2 4-4"/>`,
+    ok: `<path d="M20 6L9 17l-5-5"/>`,
+    warn: `<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/>`,
+    danger: `<path d="M12 3l7.5 3v5.5c0 4.6-3.2 8.3-7.5 9.5-4.3-1.2-7.5-4.9-7.5-9.5V6L12 3z"/><path d="M12 8v5M12 16h.01"/>`,
+    info: `<circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/>`,
+  };
+
+  function levelIcon(level, size = 14) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LEVEL_ICONS[level] || LEVEL_ICONS.info}</svg>`;
+  }
+
+  function renderResultBody(parsed) {
+    if (parsed.link) return renderLinkInspector(parsed);
+    if (parsed.fields?.length) return renderFieldList(parsed);
+    return `
+      <div class="qrs-result-plate">
+        <p class="qrs-result-text">${escapeHtml(parsed.display)}</p>
+        ${copyInlineButton()}
+      </div>`;
+  }
+
+  function renderLinkInspector(parsed) {
+    const link = parsed.link;
+    const flags = link.flags
+      .map(
+        (f) => `<li class="qrs-link-flag qrs-link-flag--${f.level}">
+          ${levelIcon(f.level === "danger" ? "danger" : f.level === "warn" ? "warn" : "ok", 13)}
+          <span>${escapeHtml(t(`link_flag_${f.key}`, f.vars))}</span>
+        </li>`
+      )
+      .join("");
+
+    const url = link.registrable
+      ? `<span class="qrs-link-scheme">${escapeHtml(link.scheme)}://</span>${
+          link.subdomain ? `<span class="qrs-link-sub">${escapeHtml(link.subdomain)}.</span>` : ""
+        }<strong class="qrs-link-domain">${escapeHtml(link.registrable)}</strong><span class="qrs-link-rest">${escapeHtml(link.rest)}</span>`
+      : `<span class="qrs-link-rest">${escapeHtml(parsed.raw.slice(0, 200))}</span>`;
+
+    return `
+      <div class="qrs-link qrs-link--${link.level}">
+        <div class="qrs-link-head">
+          <span class="qrs-link-verdict">${levelIcon(link.level, 15)}${escapeHtml(t(`link_verdict_${link.level}`))}</span>
+          ${copyInlineButton()}
+        </div>
+        <div class="qrs-link-url" dir="ltr">${url}</div>
+        ${flags ? `<ul class="qrs-link-flags">${flags}</ul>` : ""}
+      </div>`;
+  }
+
+  function renderFieldList(parsed) {
+    const rows = parsed.fields
+      .map(
+        (f) => `<div class="qrs-field">
+          <dt>${escapeHtml(f.label)}</dt>
+          <dd class="${f.mono ? "qrs-field--mono" : ""} ${f.strong ? "qrs-field--strong" : ""}" ${f.mono ? 'dir="ltr"' : ""}>${escapeHtml(f.value)}</dd>
+        </div>`
+      )
+      .join("");
+    const title = parsed.title && parsed.type !== "payment" && parsed.type !== "crypto"
+      ? `<div class="qrs-rich-title">${escapeHtml(parsed.title)}</div>`
+      : "";
+    const contactName = parsed.type === "vcard" && parsed.meta?.name
+      ? `<div class="qrs-rich-title">${escapeHtml(parsed.meta.name)}</div>`
+      : "";
+    const noteLevel = parsed.noteLevel || (parsed.type === "payment" || parsed.type === "crypto" ? "safe" : "info");
+    return `
+      <div class="qrs-rich">
+        <div class="qrs-rich-head">
+          ${title || contactName || "<span></span>"}
+          ${copyInlineButton()}
+        </div>
+        <dl class="qrs-fields">${rows}</dl>
+        ${
+          parsed.note
+            ? `<p class="qrs-rich-note qrs-rich-note--${noteLevel}">${levelIcon(noteLevel === "safe" ? "safe" : noteLevel, 13)}<span>${escapeHtml(parsed.note)}</span></p>`
+            : ""
+        }
+      </div>`;
   }
 
   function typeChipIcon(type) {
@@ -1088,7 +1382,11 @@ function initSnip({ empty, openHint }) {
       <button type="button" class="qrs-result-item" data-index="${i}" style="animation-delay:${40 + i * 50}ms">
         <span class="qrs-result-item-icon" aria-hidden="true">${formatGlyph(r.format)}</span>
         <span class="qrs-result-item-format">${escapeHtml(r.formatLabel)}</span>
-        <span class="qrs-result-item-preview">${escapeHtml(r.display.slice(0, 80))}</span>
+        <span class="qrs-result-item-preview">${
+          r.link && r.link.level !== "safe"
+            ? `<span class="qrs-risk-dot qrs-risk-dot--${r.link.level}" aria-hidden="true"></span>`
+            : ""
+        }${escapeHtml(r.display.slice(0, 80))}</span>
         <span class="qrs-chip qrs-chip--type">${escapeHtml(r.typeLabel)}</span>
       </button>`
       )
@@ -1406,6 +1704,9 @@ function initSnip({ empty, openHint }) {
         } catch (_) {
           /* quota — language still applies after reload */
         }
+      }
+      if (activeNotice) {
+        await chrome.storage.local.set({ openHint: activeNotice, scanSource: "empty" });
       }
       location.reload();
     });
